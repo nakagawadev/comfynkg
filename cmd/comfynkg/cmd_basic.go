@@ -1,0 +1,173 @@
+package main
+
+import (
+	"context"
+	"flag"
+	"fmt"
+	"strconv"
+	"sync"
+
+	"comfynkg/internal/config"
+	"comfynkg/internal/instance"
+	"comfynkg/internal/run"
+	"comfynkg/internal/systemd"
+	"comfynkg/internal/ui"
+)
+
+func cmdStatus(args []string) error {
+	c, warnings, err := load()
+	if err != nil {
+		return err
+	}
+	targets := c.Instances
+	if len(args) > 0 {
+		if targets, err = pick(c, args); err != nil {
+			return err
+		}
+	}
+	ui.Printf("%s · comfynkg %s · comfy-cli %s · uv %s\n\n", c.HostLabel(), version, toolVersion("comfy"), toolVersion("uv"))
+
+	rows := make([][]string, len(targets))
+	var wg sync.WaitGroup
+	for i, in := range targets {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			rows[i] = statusRow(in)
+		}()
+	}
+	wg.Wait()
+	ui.Table(append([][]string{{"NAME", "TYPE", "ENABLED", "ACTIVE", "PORT", "GPU", "COMFYUI", "RSS", "VRAM", "QUEUE", "RESTARTS", "HEALTH"}}, rows...))
+	if len(warnings) > 0 {
+		ui.Printf("\n")
+		for _, w := range warnings {
+			ui.Warn("%s", w)
+		}
+	}
+	return nil
+}
+
+func statusRow(in *config.Instance) []string {
+	ctx := context.Background()
+	yes := map[bool]string{true: "yes", false: "no"}
+	row := []string{in.Name, in.Type, yes[in.Enabled], "no unit", strconv.Itoa(in.Port), strconv.Itoa(*in.GPU), "-", "-", "-", "-", "-", "-"}
+	st, err := systemd.StateOf(unitOf(in))
+	if err != nil || !st.Exists {
+		return row
+	}
+	row[3] = map[string]string{"active": "running", "inactive": "stopped", "activating": "starting", "deactivating": "stopping"}[st.Active]
+	if row[3] == "" {
+		row[3] = st.Active
+	}
+	row[10] = st.Restarts
+	if st.Active != "active" {
+		if st.Active == "failed" {
+			row[11] = ui.Red("down")
+		}
+		return row
+	}
+	cl := instance.Client{Port: in.Port}
+	stats, err := cl.Stats(ctx)
+	if err != nil {
+		row[11] = ui.Red("down")
+		return row
+	}
+	row[6], row[11] = stats.Version, ui.Green("ok")
+	if q, err := cl.Queue(ctx); err == nil {
+		row[9] = fmt.Sprintf("%d/%d", q.Running, q.Pending)
+	}
+	if m, ok, _ := cl.Metrics(ctx); ok {
+		row[7], row[8] = ui.Bytes(m.RSS), ui.Bytes(m.VRAM)
+	}
+	if d, err := cl.DrainStatus(ctx); err == nil && d.Draining {
+		row[11] += "  " + ui.Yellow("draining")
+	}
+	return row
+}
+
+func cmdStart(args []string) error {
+	c, err := loadWarn()
+	if err != nil {
+		return err
+	}
+	targets, err := pick(c, args)
+	if err != nil {
+		return err
+	}
+	for _, in := range targets {
+		p := prefix(c, in)
+		if g.dryRun {
+			ui.Line(p, "would start")
+			continue
+		}
+		d, err := startAndWait(c, in, "start")
+		if err != nil {
+			ui.Line(p, "starting... %s", failed(err))
+			return fmt.Errorf("%s: %w", in.Name, err)
+		}
+		ui.Line(p, "starting... %s", okDur(d))
+	}
+	return nil
+}
+
+func cmdStop(args []string) error {
+	c, err := loadWarn()
+	if err != nil {
+		return err
+	}
+	targets, err := pick(c, args)
+	if err != nil {
+		return err
+	}
+	for _, in := range targets {
+		p := prefix(c, in)
+		if g.dryRun {
+			ui.Line(p, "would stop")
+			continue
+		}
+		if err := systemd.Ctl("stop", unitOf(in)); err != nil {
+			ui.Line(p, "stopping... %s", failed(err))
+			return fmt.Errorf("%s: %w", in.Name, err)
+		}
+		ui.Line(p, "stopping... %s", ui.Green("ok"))
+	}
+	return nil
+}
+
+func cmdLogs(args []string) error {
+	fs := flag.NewFlagSet("logs", flag.ContinueOnError)
+	follow := fs.Bool("f", false, "follow")
+	lines := fs.Int("n", 200, "lines")
+	name, rest := splitName(args)
+	if err := fs.Parse(rest); err != nil || name == "" {
+		return usagef("usage: comfynkg logs <instance> [-f] [-n 200]")
+	}
+	c, err := loadWarn()
+	if err != nil {
+		return err
+	}
+	in := c.Instance(name)
+	if in == nil {
+		return usagef("unknown instance %q", name)
+	}
+	jargs := []string{"-u", unitOf(in), "-n", strconv.Itoa(*lines), "--no-pager"}
+	if *follow {
+		jargs = append(jargs, "-f")
+	}
+	return run.Interactive(run.Command(nil, "journalctl", jargs...))
+}
+
+// splitName takes the first non-flag argument as the instance name; the rest go to flag parsing.
+func splitName(args []string) (string, []string) {
+	for i, a := range args {
+		if len(a) > 0 && a[0] != '-' && (i == 0 || args[i-1] != "-n") {
+			return a, append(append([]string{}, args[:i]...), args[i+1:]...)
+		}
+	}
+	return "", args
+}
+
+func cmdVersion(args []string) error {
+	ui.Printf("comfynkg %s\ncomfy-cli %s\nuv %s\n", version, toolVersion("comfy"), toolVersion("uv"))
+	return nil
+}
