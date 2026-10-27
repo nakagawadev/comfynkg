@@ -8,7 +8,7 @@ Global flags: `--config <path>`, `--dry-run` (show what would change, change not
 
 | Command | Does |
 |---|---|
-| `status [inst...]` | State, port, GPU, ComfyUI version, RSS, VRAM, queue, restarts, health |
+| `status [inst...] [-w]` | State, port, GPU, ComfyUI version, RSS, VRAM, queue, restarts, health; `-w` refreshes every 2 s |
 | `apply` | Make systemd match the file |
 | `start\|stop <inst\|all>` | Start or stop the unit |
 | `enable\|disable <inst>` | Set `enabled` in the file and apply |

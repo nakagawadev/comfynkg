@@ -1,11 +1,14 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"flag"
 	"fmt"
+	"os"
 	"strconv"
 	"sync"
+	"time"
 
 	"comfynkg/internal/config"
 	"comfynkg/internal/instance"
@@ -14,7 +17,34 @@ import (
 	"comfynkg/internal/ui"
 )
 
+// cmdStatus prints the table once, or with -w every 2 s until Ctrl-C (drawn in one go, no flicker).
 func cmdStatus(args []string) error {
+	var names []string
+	watch := false
+	for _, a := range args {
+		if a == "-w" || a == "--watch" {
+			watch = true
+		} else {
+			names = append(names, a)
+		}
+	}
+	if !watch {
+		return statusOnce(names)
+	}
+	for {
+		var buf bytes.Buffer
+		ui.Out = &buf
+		err := statusOnce(names)
+		ui.Out = os.Stdout
+		if err != nil {
+			return err
+		}
+		fmt.Printf("\x1b[H\x1b[2J%severy 2s · %s · Ctrl-C to exit\n", buf.String(), time.Now().Format("15:04:05"))
+		time.Sleep(2 * time.Second)
+	}
+}
+
+func statusOnce(args []string) error {
 	c, warnings, err := load()
 	if err != nil {
 		return err
@@ -41,7 +71,7 @@ func cmdStatus(args []string) error {
 	if len(warnings) > 0 {
 		ui.Printf("\n")
 		for _, w := range warnings {
-			ui.Warn("%s", w)
+			ui.Printf("%s %s\n", ui.Yellow("warning:"), w) // on stdout so -w keeps it on screen
 		}
 	}
 	return nil
