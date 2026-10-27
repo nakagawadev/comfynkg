@@ -6,7 +6,9 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
+	"time"
 
 	"comfynkg/internal/run"
 )
@@ -155,20 +157,40 @@ type State struct {
 	Active   string // ActiveState: active, inactive, failed, activating...
 	Restarts string
 	Exists   bool
+	Uptime   time.Duration // since it became active; 0 when not active or unknown
 }
 
-// StateOf reports whether a unit exists, is enabled, is active and how often it restarted.
+// StateOf reports whether a unit exists, is enabled, is active, how often it restarted and for how long it's up.
 func StateOf(unit string) (State, error) {
-	p, err := Props(unit, "UnitFileState", "ActiveState", "NRestarts", "LoadState")
+	p, err := Props(unit, "UnitFileState", "ActiveState", "NRestarts", "LoadState", "ActiveEnterTimestampMonotonic")
 	if err != nil {
 		return State{}, err
 	}
-	return State{
+	st := State{
 		Enabled:  p["UnitFileState"] == "enabled",
 		Active:   p["ActiveState"],
 		Restarts: p["NRestarts"],
 		Exists:   p["LoadState"] == "loaded",
-	}, nil
+	}
+	if st.Active == "active" {
+		st.Uptime = uptime(p["ActiveEnterTimestampMonotonic"])
+	}
+	return st, nil
+}
+
+// uptime turns a monotonic timestamp (µs since boot) into time since then, using /proc/uptime.
+// ponytail: /proc/uptime also counts suspended time; servers don't suspend.
+func uptime(enteredUS string) time.Duration {
+	us, err := strconv.ParseInt(enteredUS, 10, 64)
+	b, rerr := os.ReadFile("/proc/uptime")
+	if err != nil || rerr != nil || us == 0 {
+		return 0
+	}
+	secs, err := strconv.ParseFloat(strings.Fields(string(b))[0], 64)
+	if err != nil {
+		return 0
+	}
+	return max(0, time.Duration(secs*float64(time.Second))-time.Duration(us)*time.Microsecond)
 }
 
 // ExecPort reads `--port N` from a legacy unit's ExecStart (used by takeover).

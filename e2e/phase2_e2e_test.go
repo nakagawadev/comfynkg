@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"syscall"
 	"testing"
@@ -162,6 +163,10 @@ func TestPhase2(t *testing.T) {
 	}
 	if d := drainState(t, 8188); d["draining"] != false {
 		t.Fatalf("still draining after restart: %v", d)
+	}
+	// the new columns: comfy_a has stats, so OK/ERR counts since this start; UPTIME is short
+	if st := mustOK(t, "status", "comfy_a"); !regexp.MustCompile(`comfy_a .* 0/0 +\d+/0 +\d+ +\d+s +ok`).MatchString(st) {
+		t.Errorf("status columns:\n%s", st)
 	}
 
 	// timeout: drain off, skipped, exit 3

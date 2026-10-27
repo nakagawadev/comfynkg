@@ -67,7 +67,7 @@ func statusOnce(args []string) error {
 		}()
 	}
 	wg.Wait()
-	ui.Table(append([][]string{{"NAME", "TYPE", "ENABLED", "ACTIVE", "PORT", "GPU", "COMFYUI", "RSS", "VRAM", "QUEUE", "RESTARTS", "HEALTH"}}, rows...))
+	ui.Table(append([][]string{{"NAME", "TYPE", "ENABLED", "ACTIVE", "PORT", "GPU", "COMFYUI", "RSS", "VRAM", "QUEUE", "OK/ERR", "RESTARTS", "UPTIME", "HEALTH"}}, rows...))
 	if len(warnings) > 0 {
 		ui.Printf("\n")
 		for _, w := range warnings {
@@ -80,7 +80,7 @@ func statusOnce(args []string) error {
 func statusRow(in *config.Instance) []string {
 	ctx := context.Background()
 	yes := map[bool]string{true: "yes", false: "no"}
-	row := []string{in.Name, in.Type, yes[in.Enabled], "no unit", strconv.Itoa(in.Port), strconv.Itoa(*in.GPU), "-", "-", "-", "-", "-", "-"}
+	row := []string{in.Name, in.Type, yes[in.Enabled], "no unit", strconv.Itoa(in.Port), strconv.Itoa(*in.GPU), "-", "-", "-", "-", "-", "-", "-", "-"}
 	st, err := systemd.StateOf(unitOf(in))
 	if err != nil || !st.Exists {
 		return row
@@ -89,30 +89,47 @@ func statusRow(in *config.Instance) []string {
 	if row[3] == "" {
 		row[3] = st.Active
 	}
-	row[10] = st.Restarts
+	row[11] = st.Restarts
 	if st.Active != "active" {
 		if st.Active == "failed" {
-			row[11] = ui.Red("down")
+			row[13] = ui.Red("down")
 		}
 		return row
+	}
+	if st.Uptime > 0 {
+		row[12] = shortDuration(st.Uptime)
 	}
 	cl := instance.Client{Port: in.Port}
 	stats, err := cl.Stats(ctx)
 	if err != nil {
-		row[11] = ui.Red("down")
+		row[13] = ui.Red("down")
 		return row
 	}
-	row[6], row[11] = stats.Version, ui.Green("ok")
+	row[6], row[13] = stats.Version, ui.Green("ok")
 	if q, err := cl.Queue(ctx); err == nil {
 		row[9] = fmt.Sprintf("%d/%d", q.Running, q.Pending)
 	}
 	if m, ok, _ := cl.Metrics(ctx); ok {
-		row[7], row[8] = ui.Bytes(m.RSS), ui.Bytes(m.VRAM)
+		row[7], row[8], row[10] = ui.Bytes(m.RSS), ui.Bytes(m.VRAM), fmt.Sprintf("%.0f/%.0f", m.OK, m.Err)
 	}
 	if d, err := cl.DrainStatus(ctx); err == nil && d.Draining {
-		row[11] += "  " + ui.Yellow("draining")
+		row[13] += "  " + ui.Yellow("draining")
 	}
 	return row
+}
+
+// shortDuration prints the two largest units: 2d4h, 3h12m, 45m, 30s.
+func shortDuration(d time.Duration) string {
+	s := int(d.Seconds())
+	switch {
+	case s >= 86400:
+		return fmt.Sprintf("%dd%dh", s/86400, s%86400/3600)
+	case s >= 3600:
+		return fmt.Sprintf("%dh%dm", s/3600, s%3600/60)
+	case s >= 60:
+		return fmt.Sprintf("%dm", s/60)
+	}
+	return fmt.Sprintf("%ds", s)
 }
 
 func cmdStart(args []string) error {

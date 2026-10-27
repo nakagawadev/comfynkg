@@ -3,6 +3,7 @@ package main
 import (
 	"reflect"
 	"testing"
+	"time"
 )
 
 func TestSkippedNodes(t *testing.T) {
@@ -23,6 +24,19 @@ func TestManagerFlags(t *testing.T) {
 	for _, own := range []string{"--enable-manager", "--enable-manager-legacy-ui", "--disable-manager-ui"} {
 		if got := managerFlags([]string{own}); !reflect.DeepEqual(got, []string{own}) {
 			t.Errorf("%s: %q", own, got)
+		}
+	}
+}
+
+func TestShortDuration(t *testing.T) {
+	for d, want := range map[time.Duration]string{
+		30 * time.Second:                "30s",
+		45*time.Minute + 10*time.Second: "45m",
+		3*time.Hour + 12*time.Minute:    "3h12m",
+		52*time.Hour + 30*time.Minute:   "2d4h",
+	} {
+		if got := shortDuration(d); got != want {
+			t.Errorf("shortDuration(%v) = %q, want %q", d, got, want)
 		}
 	}
 }
