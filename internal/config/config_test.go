@@ -106,6 +106,7 @@ func TestValidateErrors(t *testing.T) {
 		{"no gpu", "comfy_1:\n  type: image\n  port: 8189\n", "gpu: required"},
 		{"bad memory", "comfy_1:\n  type: image\n  port: 8189\n  gpu: 1\n  memory_max: lots\n", "not a systemd size"},
 		{"newline in root", "", "may only contain"},
+		{"bad host", "hosts: [pc0, '-oProxyCommand=x']\n", "is not a host name"},
 		{"models in sync source", "sync:\n  image:\n    source: DIR/config/\n    to: [comfy@node0:/x/]\n", "inside sync.image.source"},
 	}
 	base := strings.Split(good, "comfy_1:")[0] + "comfy_0:\n  type: image\n  port: 8188\n  gpu: 0\n  enabled: true\n"

@@ -18,6 +18,8 @@ models:                            # extra_model_paths.yaml per type
 plugin:                            # optional, writes comfyui_nakagawa.yaml (see below)
   stats: { enabled: true, dir: /home/comfy/stats }
 
+hosts: [node1, node2]              # optional: other servers `status` also shows, asked over ssh
+
 sync:                              # optional, only on the server that sends models
   image:
     source: /home/comfy/models/image/
@@ -56,6 +58,10 @@ Warnings (the command still runs): an instance without `--disable-metadata`, two
 ## Changing the file
 
 Edit it and run `comfynkg apply`, or let comfynkg edit it for you: `enable`, `disable`, `set <inst|global> <key> <value>`, `create` and `remove` validate the change and apply it.
+
+## Other servers in `status`
+
+With `hosts:`, `status` also runs `comfynkg status --local` on each of those servers over ssh, as the owner of the instances (the same key and `~/.ssh/config` that model sync uses; a plain name means `<owner>@name`), and prints one table per server. A server that doesn't answer shows as `unreachable` and the rest still print. `status <inst>` finds the instance on whichever server has it. The other servers need comfynkg too, and nothing else is run there.
 
 ## Plugin
 

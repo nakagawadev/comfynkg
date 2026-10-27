@@ -40,3 +40,12 @@ func TestShortDuration(t *testing.T) {
 		}
 	}
 }
+
+func TestShellQuote(t *testing.T) {
+	if got := shellQuote([]string{"comfy_0", "x'; rm -rf /"}); got != `'comfy_0' 'x'\''; rm -rf /'` {
+		t.Errorf("shellQuote = %s", got)
+	}
+	if got := lastLine("ssh: connect to host pc1 port 29: Connection refused\n\n"); got != "ssh: connect to host pc1 port 29: Connection refused" {
+		t.Errorf("lastLine = %q", got)
+	}
+}

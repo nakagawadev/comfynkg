@@ -3,10 +3,12 @@ package main
 import (
 	"bytes"
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -17,24 +19,36 @@ import (
 	"comfynkg/internal/ui"
 )
 
+type statusOpts struct {
+	names     []string
+	local     bool // only this host, even with `hosts:`
+	ifPresent bool // skip names this host doesn't have; print nothing when none match (used over ssh)
+}
+
 // cmdStatus prints the table once, or with -w every 2 s until Ctrl-C (drawn in one go, no flicker).
+// With `hosts:` in the config it also shows each of those hosts, asked over ssh.
 func cmdStatus(args []string) error {
-	var names []string
+	var o statusOpts
 	watch := false
 	for _, a := range args {
-		if a == "-w" || a == "--watch" {
+		switch a {
+		case "-w", "--watch":
 			watch = true
-		} else {
-			names = append(names, a)
+		case "--local":
+			o.local = true
+		case "--if-present":
+			o.ifPresent = true
+		default:
+			o.names = append(o.names, a)
 		}
 	}
 	if !watch {
-		return statusOnce(names)
+		return statusOnce(o)
 	}
 	for {
 		var buf bytes.Buffer
 		ui.Out = &buf
-		err := statusOnce(names)
+		err := statusOnce(o)
 		ui.Out = os.Stdout
 		if err != nil {
 			return err
@@ -44,17 +58,74 @@ func cmdStatus(args []string) error {
 	}
 }
 
-func statusOnce(args []string) error {
+func statusOnce(o statusOpts) error {
 	c, warnings, err := load()
 	if err != nil {
 		return err
 	}
+	hosts := c.Hosts
+	if o.local {
+		hosts = nil
+	}
+	// other hosts first, in the background: ssh is the slow part
+	remote := make([]hostStatus, len(hosts))
+	var wg sync.WaitGroup
+	for i, h := range hosts {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			remote[i] = askHost(c, h, o.names)
+		}()
+	}
+
+	lenient := o.ifPresent || len(hosts) > 0 // a name may live on another host
+	all := len(o.names) == 1 && o.names[0] == "all"
 	targets := c.Instances
-	if len(args) > 0 {
-		if targets, err = pick(c, args); err != nil {
+	if len(o.names) > 0 {
+		if lenient && !all {
+			targets = nil
+			for _, n := range o.names {
+				if in := c.Instance(n); in != nil {
+					targets = append(targets, in)
+				}
+			}
+		} else if targets, err = pick(c, o.names); err != nil {
 			return err
 		}
 	}
+	found := len(targets) > 0
+	printed := found || len(o.names) == 0 || (all && !o.ifPresent)
+	if printed {
+		printStatus(c, targets, warnings)
+	}
+
+	wg.Wait()
+	unreachable := false
+	sep := func() {
+		if printed {
+			ui.Printf("\n")
+		}
+		printed = true
+	}
+	for i, r := range remote {
+		switch {
+		case r.err != nil:
+			unreachable = true
+			sep()
+			ui.Printf("%s%s%s %s\n", ui.Yellow(hosts[i]), ui.Dim(" · "), ui.Red("unreachable"), ui.Dim(r.err.Error()))
+		case r.out != "":
+			found = true
+			sep()
+			ui.Printf("%s", r.out)
+		}
+	}
+	if len(o.names) > 0 && !all && !found && !unreachable && !o.ifPresent {
+		return usagef("unknown instance %s", strings.Join(o.names, ", "))
+	}
+	return nil
+}
+
+func printStatus(c *config.Config, targets []*config.Instance, warnings []string) {
 	dot := ui.Dim(" · ")
 	ui.Printf("%s%s%s%s\n\n", ui.Yellow(c.HostLabel()), dot, ui.Cyan("comfynkg "+version),
 		ui.Dim(fmt.Sprintf(" · comfy-cli %s · uv %s", toolVersion("comfy"), toolVersion("uv"))))
@@ -83,7 +154,71 @@ func statusOnce(args []string) error {
 			ui.Printf("%s %s\n", ui.Yellow("warning:"), w) // on stdout so -w keeps it on screen
 		}
 	}
-	return nil
+}
+
+type hostStatus struct {
+	out string
+	err error
+}
+
+// hostTimeout bounds one host's answer; ConnectTimeout covers a host that's down.
+var hostTimeout = 20 * time.Second
+
+// askHost runs `comfynkg status --local` on another host over ssh, as the owner (the same key
+// and ~/.ssh/config as model sync). A plain host means <owner>@host.
+func askHost(c *config.Config, host string, names []string) hostStatus {
+	dest := host
+	if !strings.Contains(host, "@") {
+		dest = c.Owner.Name + "@" + host
+	}
+	remote := "/usr/local/bin/comfynkg status --local"
+	if len(names) > 0 {
+		remote += " --if-present " + shellQuote(names)
+	}
+	if ui.Colored() {
+		remote = "CLICOLOR_FORCE=1 " + remote
+	}
+	var u *run.User
+	if os.Geteuid() == 0 {
+		u = owner(c)
+	}
+	cmd := run.Command(u, "ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=5", "--", dest, remote)
+	var buf bytes.Buffer
+	cmd.Stdout, cmd.Stderr = &buf, &buf
+	if err := cmd.Start(); err != nil {
+		return hostStatus{err: err}
+	}
+	done := make(chan error, 1)
+	go func() { done <- cmd.Wait() }()
+	var err error
+	select {
+	case err = <-done:
+	case <-time.After(hostTimeout):
+		cmd.Process.Kill()
+		<-done
+		err = fmt.Errorf("no answer after %s", hostTimeout)
+	}
+	if err != nil {
+		if msg := lastLine(buf.String()); msg != "" {
+			err = errors.New(msg)
+		}
+		return hostStatus{err: err}
+	}
+	return hostStatus{out: buf.String()}
+}
+
+// shellQuote quotes words for the remote shell ssh runs them in.
+func shellQuote(words []string) string {
+	q := make([]string, len(words))
+	for i, w := range words {
+		q[i] = "'" + strings.ReplaceAll(w, "'", `'\''`) + "'"
+	}
+	return strings.Join(q, " ")
+}
+
+func lastLine(s string) string {
+	lines := strings.Split(strings.TrimSpace(s), "\n")
+	return strings.TrimSpace(lines[len(lines)-1])
 }
 
 func statusRow(in *config.Instance) []string {

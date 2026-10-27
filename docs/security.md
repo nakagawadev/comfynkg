@@ -11,6 +11,8 @@ Custom nodes run arbitrary code, and anyone who can reach ComfyUI-Manager can in
 - **Root stays out of the owner's folders.** git, comfy-cli, uv, rsync and every file comfynkg reads or writes there (plugin config, sync state, copied nodes) go through `runuser -u <owner>`. A symlink planted by the owner can only reach what the owner could already reach.
 - **Unit files can't be injected.** Values that end up in a unit are restricted to safe characters and line breaks are refused.
 
+Commands that only read (`status`, `drain status`, `sync status`) run as any user; everything that changes something requires root. With `hosts:`, `status` reaches the other servers over ssh as the owner and runs only `comfynkg status --local` there.
+
 Root owns only `/etc/comfynkg.yaml`, the units in `/etc/systemd/system/` and the binaries in `/usr/local/bin`.
 
 ## Network

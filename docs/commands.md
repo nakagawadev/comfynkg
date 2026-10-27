@@ -1,6 +1,6 @@
 # Commands
 
-`comfynkg <command> [args] [flags]`, as root. `<inst>` is an instance name, several are allowed; `all` means every enabled instance.
+`comfynkg <command> [args] [flags]`, as root; `status`, `drain status` and `sync status` only read, so any user can run them. `<inst>` is an instance name, several are allowed; `all` means every enabled instance.
 
 Global flags: `--config <path>`, `--dry-run` (show what would change, change nothing), `--verbose` (print every external command and HTTP call).
 
@@ -8,7 +8,7 @@ Global flags: `--config <path>`, `--dry-run` (show what would change, change not
 
 | Command | Does |
 |---|---|
-| `status [inst...] [-w]` | State, port, GPU, ComfyUI version, RSS, VRAM, queue, prompts ok/error and uptime since the last start, restarts, health; `-w` refreshes every 2 s |
+| `status [inst...] [-w] [--local]` | State, port, GPU, ComfyUI version, RSS, VRAM, queue, prompts ok/error and uptime since the last start, restarts, health; also the servers in `hosts:` (over ssh) unless `--local`; `-w` refreshes every 2 s |
 | `apply` | Make systemd match the file |
 | `start\|stop <inst\|all>` | Start or stop the unit |
 | `enable\|disable <inst>` | Set `enabled` in the file and apply |

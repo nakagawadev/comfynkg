@@ -20,7 +20,7 @@ func cmdSync(args []string) error {
 		return usagef("usage: comfynkg sync status|now|dry-run [image|video] | sync loop <type>")
 	}
 	verb, rest := args[0], args[1:]
-	if verb != "loop" && os.Geteuid() != 0 {
+	if verb != "loop" && verb != "status" && os.Geteuid() != 0 {
 		return usagef("sync %s must run as root", verb)
 	}
 	c, err := config.Load(g.config)

@@ -45,7 +45,7 @@ type command struct {
 }
 
 var commands = map[string]command{
-	"status":      {cmdStatus, true},
+	"status":      {cmdStatus, false},
 	"apply":       {cmdApply, true},
 	"start":       {cmdStart, true},
 	"stop":        {cmdStop, true},
@@ -54,7 +54,7 @@ var commands = map[string]command{
 	"set":         {cmdSet, true},
 	"logs":        {cmdLogs, true},
 	"restart":     {cmdRestart, true},
-	"drain":       {cmdDrain, true},
+	"drain":       {cmdDrain, false}, // on/off check root themselves
 	"create":      {cmdCreate, true},
 	"remove":      {cmdRemove, true},
 	"node":        {cmdNode, true},

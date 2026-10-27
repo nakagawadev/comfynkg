@@ -23,6 +23,7 @@ var (
 	nameRe     = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,31}$`)
 	rootRe     = regexp.MustCompile(`^/[A-Za-z0-9._/-]+$`) // goes into unit files: no newlines, %, quotes or spaces
 	memoryRe   = regexp.MustCompile(`^(infinity|[0-9]+[KMGT]?)$`)
+	hostRe     = regexp.MustCompile(`^([a-z_][a-z0-9_-]*@)?[A-Za-z0-9][A-Za-z0-9.-]*$`) // goes into an ssh command line
 	ownedFlags = []string{"--listen", "--port", "--cuda-device", "--extra-model-paths-config"}
 	Types      = []string{"image", "video"}
 )
@@ -58,6 +59,7 @@ type Config struct {
 	Plugin    map[string]any
 	HasPlugin bool // a `plugin:` key exists, even empty
 	Sync      map[string]SyncType
+	Hosts     []string    // other servers `status` also shows: host or user@host
 	Instances []*Instance // sorted by name
 	Owner     Owner       // filled by Validate
 
@@ -119,6 +121,8 @@ func Parse(data []byte) (*Config, error) {
 			err = val.Decode(&c.Plugin)
 		case "sync":
 			err = strict(val, &c.Sync)
+		case "hosts":
+			err = val.Decode(&c.Hosts)
 		default:
 			if !nameRe.MatchString(key) {
 				return nil, fmt.Errorf("line %d: %q is not a valid instance name (%s)", top.Content[i].Line, key, nameRe)
@@ -280,6 +284,11 @@ func (c *Config) Validate() (warnings []string, err error) {
 	}
 	errs = append(errs, c.validateSync()...)
 	errs = append(errs, c.validatePlugin()...)
+	for _, h := range c.Hosts {
+		if !hostRe.MatchString(h) {
+			bad("hosts: %q is not a host name or user@host", h)
+		}
+	}
 	if len(errs) > 0 {
 		return warnings, &ValidationError{Errs: errs}
 	}

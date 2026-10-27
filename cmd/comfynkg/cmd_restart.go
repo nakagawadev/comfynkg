@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -260,6 +261,9 @@ func cmdDrain(args []string) error {
 	}
 	if verb != "on" && verb != "off" {
 		return usagef("drain: on, off or status")
+	}
+	if os.Geteuid() != 0 {
+		return usagef("drain %s must run as root", verb)
 	}
 	targets, err := pick(c, names)
 	if err != nil {

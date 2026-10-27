@@ -16,10 +16,15 @@ var (
 	color           = isTTY(os.Stdout)
 )
 
+// isTTY says whether to color: a terminal, or CLICOLOR_FORCE (set by `status` when it asks other hosts over ssh).
 func isTTY(f *os.File) bool {
 	fi, err := f.Stat()
-	return err == nil && fi.Mode()&os.ModeCharDevice != 0 && os.Getenv("NO_COLOR") == ""
+	tty := err == nil && fi.Mode()&os.ModeCharDevice != 0
+	return (tty || os.Getenv("CLICOLOR_FORCE") != "") && os.Getenv("NO_COLOR") == ""
 }
+
+// Colored reports whether output is colored.
+func Colored() bool { return color }
 
 func paint(code, s string) string {
 	if !color {
