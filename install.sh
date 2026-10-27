@@ -21,10 +21,11 @@ if ! command -v uv >/dev/null 2>&1; then
   curl -fsSL https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/usr/local/bin UV_NO_MODIFY_PATH=1 sh
 fi
 
-# comfy-cli, shared by every user (uv-managed Python kept out of root's home)
+# comfy-cli, shared by every user (uv-managed Python kept out of root's home).
+# It creates the instance venvs with its own Python, so pin one ComfyUI supports.
 echo "> installing comfy-cli"
 export UV_TOOL_DIR=/opt/comfynkg/tools UV_TOOL_BIN_DIR=/usr/local/bin UV_PYTHON_INSTALL_DIR=/opt/comfynkg/python
-uv tool install --upgrade comfy-cli
+uv tool install --upgrade --python 3.12 comfy-cli
 chmod -R a+rX /opt/comfynkg
 
 # comfynkg, checked against the release's SHA256SUMS
