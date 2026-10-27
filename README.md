@@ -1,6 +1,10 @@
-# comfynkg
+<div align="center">
 
-Run several ComfyUI instances on one Linux server from a single YAML file.
+# comfynkg
+**Run several ComfyUI instances on one Linux server from a single YAML file.**
+
+<img src="docs/assets/status.webp" alt="comfynkg status showing two servers and their ComfyUI instances" width="700">
+</div>
 
 comfynkg turns `/etc/comfynkg.yaml` into systemd units, restarts instances without dropping queued prompts, updates ComfyUI and custom nodes with a canary and automatic rollback, and keeps model folders in sync across servers. It wraps [comfy-cli](https://github.com/Comfy-Org/comfy-cli) and ships as one static Go binary.
 
