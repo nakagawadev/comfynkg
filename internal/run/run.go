@@ -43,6 +43,9 @@ func Command(u *User, name string, args ...string) *exec.Cmd {
 	if u != nil {
 		env = append(env, "HOME="+u.Home, "USER="+u.Name, "LOGNAME="+u.Name)
 		cmd = exec.Command("runuser", append([]string{"-u", u.Name, "--", name}, args...)...)
+		// Start in the owner's home, not root's working directory: tools like uv look for config
+		// files in the current directory and fail when it's /root (mode 700).
+		cmd.Dir = u.Home
 	} else {
 		cmd = exec.Command(name, args...)
 	}

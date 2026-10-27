@@ -70,6 +70,7 @@ func queueSleep(t *testing.T, port int, seconds float64) int {
 // background starts comfynkg and returns a func that waits and returns output and exit code.
 func background(t *testing.T, args ...string) (*exec.Cmd, func() result) {
 	cmd := exec.Command(bin, args...)
+	cmd.Dir = "/root" // like an admin in a root shell: owner commands must not inherit it
 	var buf bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &buf, &buf
 	if err := cmd.Start(); err != nil {

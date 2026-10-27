@@ -64,11 +64,19 @@ echo "NODE_CLASS_MAPPINGS = {}" > %[2]s/custom_nodes/legacy_file.py'`, base, leg
 	mustOK(t, "comfy", "comfy_l", "--", "node", "install", "comfyui_nakagawa@0.0.4")
 	pyproject := "/home/comfy/instances/comfy_l/custom_nodes/comfyui_nakagawa/pyproject.toml"
 	contains(t, sh(t, "grep -m1 ^version "+pyproject), `"0.0.4"`)
-	contains(t, mustOK(t, "update", "nodes", "comfy_l", "comfyui_nakagawa"), "done: 1 updated")
+	out = mustOK(t, "update", "nodes", "comfy_l", "comfyui_nakagawa", "--remote")
+	contains(t, out, "--mode', 'remote'", "done: 1 updated")
+	if strings.Contains(out, "Permission denied") {
+		t.Error("an owner command ran in root's working directory")
+	}
 	if strings.Contains(sh(t, "grep -m1 ^version "+pyproject), `"0.0.4"`) {
 		t.Error("comfyui_nakagawa still at 0.0.4 after the update and restart")
 	}
-	if r := nkg(t, "update", "nodes", "comfy_l", "not-a-real-node"); r.code != 1 || !strings.Contains(r.out, "not updated: not-a-real-node (not installed)") {
+	// default: Manager's cache (filled by the run above and by the instance itself), no catalog download
+	if out = mustOK(t, "update", "nodes", "comfy_l", "comfyui_nakagawa"); strings.Contains(out, "'remote'") {
+		t.Error("update nodes without --remote used remote mode")
+	}
+	if r := nkg(t, "update", "nodes", "comfy_l", "not-a-real-node"); r.code != 1 || !strings.Contains(r.out, "not updated: not-a-real-node (not installed); a registry node needs fresh registry data: retry with --remote") {
 		t.Errorf("unknown node: exit %d", r.code)
 	}
 

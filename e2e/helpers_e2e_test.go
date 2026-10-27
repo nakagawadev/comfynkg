@@ -31,6 +31,7 @@ type result struct {
 func nkg(t *testing.T, args ...string) result {
 	t.Helper()
 	cmd := exec.Command(bin, args...)
+	cmd.Dir = "/root" // like an admin in a root shell: owner commands must not inherit it
 	var buf bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &buf, &buf
 	err := cmd.Run()

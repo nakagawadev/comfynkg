@@ -585,7 +585,7 @@ func cmdUpdate(args []string) error {
 		})
 	case "nodes":
 		if len(args) < 2 {
-			return usagef("usage: comfynkg update nodes <instance|all> [node...]")
+			return usagef("usage: comfynkg update nodes <instance|all> [node...] [--remote]")
 		}
 		c, err := loadWarn()
 		if err != nil {
@@ -595,17 +595,28 @@ func cmdUpdate(args []string) error {
 		if err != nil {
 			return err
 		}
-		nodes := args[2:]
+		var nodes, mode []string
+		for _, a := range args[2:] {
+			if a == "--remote" {
+				mode = []string{"--mode", "remote"}
+			} else {
+				nodes = append(nodes, a)
+			}
+		}
 		if len(nodes) == 0 {
 			nodes = []string{"all"}
 		}
 		return canary(c, targets, "updating nodes", func(in *config.Instance) (func() error, error) {
-			// --mode remote: with its cached registry data, Manager reports registry nodes as not installed.
-			// A registry node switches version at ComfyUI's next start, which the canary restart covers.
+			// Manager's cached registry data is refreshed in the background while the instance runs;
+			// --remote downloads the whole catalog now (minutes). A registry node switches version at
+			// ComfyUI's next start, which the canary restart covers.
 			var out bytes.Buffer
-			err := workspace(c, in).Run(io.MultiWriter(ui.Out, &out), append(append([]string{"node", "update"}, nodes...), "--mode", "remote")...)
+			err := workspace(c, in).Run(io.MultiWriter(ui.Out, &out), append(append([]string{"node", "update"}, nodes...), mode...)...)
 			if err == nil {
 				err = skippedNodes(out.String())
+			}
+			if err != nil && mode == nil && strings.Contains(err.Error(), "(not installed)") {
+				err = fmt.Errorf("%w; a registry node needs fresh registry data: retry with --remote", err)
 			}
 			return nil, err
 		})

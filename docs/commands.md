@@ -25,7 +25,7 @@ Global flags: `--config <path>`, `--dry-run` (show what would change, change not
 | `remove <inst> [--purge]` | Remove the unit and the file entry; `--purge` also deletes its folder |
 | `node install\|uninstall\|enable\|disable <inst\|all> <node> [--ref <branch\|tag>]` | Custom nodes; `--ref` installs from git |
 | `update core <inst\|all> [--version X]` | Update ComfyUI, canary first, rollback on failure |
-| `update nodes <inst\|all> [node...]` | Update custom nodes, same way |
+| `update nodes <inst\|all> [node...] [--remote]` | Update custom nodes, same way |
 | `update cli` | Upgrade comfy-cli |
 | `snapshot <inst>` · `rollback <inst> [file]` | Save or restore a custom node snapshot |
 | `comfy <inst> -- <args>` | Run comfy-cli on that instance (options that would break comfynkg are refused) |
