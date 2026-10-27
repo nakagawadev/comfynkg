@@ -225,6 +225,9 @@ func lastLine(s string) string {
 	return strings.TrimSpace(lines[len(lines)-1])
 }
 
+// startGrace is how long an instance that doesn't answer yet is "starting" rather than "down".
+const startGrace = 2 * time.Minute
+
 // statusRow builds one line of the table. vram is per-PID usage from nvidia-smi; without it
 // (no NVIDIA GPU) VRAM falls back to what PyTorch has reserved, from the plugin.
 func statusRow(in *config.Instance, vram map[int]float64) []string {
@@ -249,10 +252,18 @@ func statusRow(in *config.Instance, vram map[int]float64) []string {
 	if st.Uptime > 0 {
 		row[12] = shortDuration(st.Uptime)
 	}
+	if vram != nil {
+		row[8] = ui.Bytes(vram[st.PID]) // from the GPU, so it shows even when ComfyUI doesn't answer
+	}
 	cl := instance.Client{Port: in.Port}
 	stats, err := cl.Stats(ctx)
 	if err != nil {
-		row[13] = ui.Red("down")
+		// systemd says active at once; ComfyUI answers only after loading its custom nodes
+		if st.Uptime > 0 && st.Uptime < startGrace {
+			row[13] = ui.Yellow("starting")
+		} else {
+			row[13] = ui.Red("down")
+		}
 		return row
 	}
 	row[6], row[13] = stats.Version, ui.Green("ok")
@@ -260,10 +271,10 @@ func statusRow(in *config.Instance, vram map[int]float64) []string {
 		row[9] = fmt.Sprintf("%d/%d", q.Running, q.Pending)
 	}
 	if m, ok, _ := cl.Metrics(ctx); ok {
-		row[7], row[8], row[10] = ui.Bytes(m.RSS), ui.Bytes(m.VRAM), fmt.Sprintf("%.0f/%.0f", m.OK, m.Err)
-	}
-	if vram != nil {
-		row[8] = ui.Bytes(vram[st.PID]) // 0B: ComfyUI holds nothing on the GPU yet
+		row[7], row[10] = ui.Bytes(m.RSS), fmt.Sprintf("%.0f/%.0f", m.OK, m.Err)
+		if vram == nil { // no nvidia-smi: what PyTorch has reserved is the best there is
+			row[8] = ui.Bytes(m.VRAM)
+		}
 	}
 	if d, err := cl.DrainStatus(ctx); err == nil && d.Draining {
 		row[13] += "  " + ui.Yellow("draining")
