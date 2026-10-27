@@ -39,9 +39,9 @@ func Yellow(s string) string { return paint("33", s) }
 func Cyan(s string) string   { return paint("36", s) }
 func Dim(s string) string    { return paint("2", s) }
 
-// Prefix is `> host:port (name)`.
+// Prefix is `> host:port (name)`: the host yellow, the port dim, the name cyan, like status.
 func Prefix(host string, port int, name string) string {
-	return fmt.Sprintf("> %s:%d (%s)", host, port, name)
+	return fmt.Sprintf("> %s%s %s", Yellow(host), Dim(fmt.Sprintf(":%d", port)), "("+Cyan(name)+")")
 }
 
 // Line prints one message about an instance; prefix is "> host:port (name)".
@@ -61,9 +61,16 @@ var ansi = regexp.MustCompile("\x1b\\[[0-9;]*m")
 // width is what a cell takes on screen: color codes don't count.
 func width(s string) int { return utf8.RuneCountInString(ansi.ReplaceAllString(s, "")) }
 
-// Table prints rows aligned in columns, two spaces apart; the first row is the header.
+// Table prints rows aligned in columns, two spaces apart; the first row is the header, dimmed.
 // Cells may be colored: alignment uses the visible width.
 func Table(rows [][]string) {
+	if len(rows) > 0 {
+		header := make([]string, len(rows[0]))
+		for i, h := range rows[0] {
+			header[i] = Dim(h)
+		}
+		rows = append([][]string{header}, rows[1:]...)
+	}
 	var widths []int
 	for _, r := range rows {
 		for i, c := range r {

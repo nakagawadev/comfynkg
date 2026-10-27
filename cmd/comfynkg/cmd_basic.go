@@ -148,9 +148,6 @@ func printStatus(c *config.Config, targets []*config.Instance, warnings []string
 	}
 	wg.Wait()
 	header := []string{"NAME", "TYPE", "ENABLED", "ACTIVE", "PORT", "GPU", "COMFYUI", "RSS", "VRAM", "QUEUE", "OK/ERR", "RESTARTS", "UPTIME", "HEALTH"}
-	for i := range header {
-		header[i] = ui.Dim(header[i])
-	}
 	for _, r := range rows {
 		paintRow(r)
 	}
@@ -281,6 +278,10 @@ func paintRow(r []string) {
 		switch v {
 		case "yes", "running":
 			r[i+1] = ui.Green(v)
+		case "starting":
+			r[i+1] = ui.Yellow(v)
+		case "failed":
+			r[i+1] = ui.Red(v)
 		case "-":
 			r[i+1] = ui.Dim(v)
 		}
