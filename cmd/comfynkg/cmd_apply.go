@@ -183,15 +183,17 @@ func writePluginConfigs(c *config.Config) error {
 	if !c.HasPlugin {
 		return nil
 	}
+	seen := map[string]bool{}
 	for _, typ := range config.Types {
-		if c.Models[typ] == "" {
+		path := c.PluginPath(typ)
+		if c.Models[typ] == "" || seen[path] {
 			continue
 		}
+		seen[path] = true
 		want, err := c.PluginFile(typ)
 		if err != nil {
 			return err
 		}
-		path := c.PluginPath(typ)
 		// The folder belongs to the owner: check with Lstat (never follows links), read and write as the owner.
 		var have []byte
 		if fi, err := os.Lstat(path); err == nil {

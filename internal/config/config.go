@@ -380,6 +380,7 @@ func (c *Config) validatePlugin() []string {
 
 // PluginFile renders comfyui_nakagawa.yaml for one model type:
 // plugin.stats, drain always on, per-instance overrides keyed by port.
+// Types that share a models file share this file, so it holds their instances too.
 func (c *Config) PluginFile(typ string) ([]byte, error) {
 	out := map[string]any{"drain": true}
 	if st, ok := c.Plugin["stats"]; ok {
@@ -389,7 +390,7 @@ func (c *Config) PluginFile(typ string) ([]byte, error) {
 	byPort := map[string]any{}
 	for name, v := range insts {
 		in := c.Instance(name)
-		if in == nil || in.Type != typ {
+		if in == nil || c.PluginPath(in.Type) != c.PluginPath(typ) {
 			continue
 		}
 		m, _ := v.(map[string]any)

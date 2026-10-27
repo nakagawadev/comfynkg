@@ -224,6 +224,13 @@ plugin:
 	if !strings.HasSuffix(c.PluginPath("image"), "/config/image/comfyui_nakagawa.yaml") {
 		t.Error(c.PluginPath("image"))
 	}
+	// image and video on one models file: one plugin file with both types' overrides
+	shared := fixture(t, strings.Replace(good, "config/video/", "config/image/", 1)+"comfy_v:\n  type: video\n  port: 8190\n  gpu: 2\nplugin:\n  instances:\n    comfy_0: { drain: false }\n    comfy_v: { stats: { enabled: true } }\n")
+	img, _ := shared.PluginFile("image")
+	vid, _ := shared.PluginFile("video")
+	if string(img) != string(vid) || !strings.Contains(string(img), `"8188":`) || !strings.Contains(string(img), `"8190":`) {
+		t.Errorf("shared models file:\n%s\n---\n%s", img, vid)
+	}
 	bad := fixture(t, good+"plugin:\n  instances:\n    comfy_9: {}\n  extra: 1\n")
 	if _, err := bad.Validate(); err == nil || !strings.Contains(err.Error(), "no such instance") || !strings.Contains(err.Error(), "plugin.extra") {
 		t.Errorf("err = %v", err)
