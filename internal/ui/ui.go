@@ -5,9 +5,10 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"regexp"
 	"strings"
-	"text/tabwriter"
 	"time"
+	"unicode/utf8"
 )
 
 var (
@@ -30,6 +31,8 @@ func paint(code, s string) string {
 func Green(s string) string  { return paint("32", s) }
 func Red(s string) string    { return paint("31", s) }
 func Yellow(s string) string { return paint("33", s) }
+func Cyan(s string) string   { return paint("36", s) }
+func Dim(s string) string    { return paint("2", s) }
 
 // Prefix is `> host:port (name)`.
 func Prefix(host string, port int, name string) string {
@@ -48,13 +51,33 @@ func Warn(format string, a ...any) {
 	fmt.Fprintf(os.Stderr, "%s %s\n", Yellow("warning:"), fmt.Sprintf(format, a...))
 }
 
-// Table prints rows aligned in columns; the first row is the header.
+var ansi = regexp.MustCompile("\x1b\\[[0-9;]*m")
+
+// width is what a cell takes on screen: color codes don't count.
+func width(s string) int { return utf8.RuneCountInString(ansi.ReplaceAllString(s, "")) }
+
+// Table prints rows aligned in columns, two spaces apart; the first row is the header.
+// Cells may be colored: alignment uses the visible width.
 func Table(rows [][]string) {
-	tw := tabwriter.NewWriter(Out, 0, 0, 2, ' ', 0)
+	var widths []int
 	for _, r := range rows {
-		fmt.Fprintln(tw, strings.Join(r, "\t"))
+		for i, c := range r {
+			if i == len(widths) {
+				widths = append(widths, 0)
+			}
+			widths[i] = max(widths[i], width(c))
+		}
 	}
-	tw.Flush()
+	for _, r := range rows {
+		var b strings.Builder
+		for i, c := range r {
+			b.WriteString(c)
+			if i < len(r)-1 {
+				b.WriteString(strings.Repeat(" ", widths[i]-width(c)+2))
+			}
+		}
+		fmt.Fprintln(Out, b.String())
+	}
 }
 
 // Dur formats a duration like 18s, 2m41s or 1h2m.

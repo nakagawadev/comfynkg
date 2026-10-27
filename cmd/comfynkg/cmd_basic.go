@@ -55,7 +55,9 @@ func statusOnce(args []string) error {
 			return err
 		}
 	}
-	ui.Printf("%s · comfynkg %s · comfy-cli %s · uv %s\n\n", c.HostLabel(), version, toolVersion("comfy"), toolVersion("uv"))
+	dot := ui.Dim(" · ")
+	ui.Printf("%s%s%s%s\n\n", ui.Yellow(c.HostLabel()), dot, ui.Cyan("comfynkg "+version),
+		ui.Dim(fmt.Sprintf(" · comfy-cli %s · uv %s", toolVersion("comfy"), toolVersion("uv"))))
 
 	rows := make([][]string, len(targets))
 	var wg sync.WaitGroup
@@ -67,7 +69,14 @@ func statusOnce(args []string) error {
 		}()
 	}
 	wg.Wait()
-	ui.Table(append([][]string{{"NAME", "TYPE", "ENABLED", "ACTIVE", "PORT", "GPU", "COMFYUI", "RSS", "VRAM", "QUEUE", "OK/ERR", "RESTARTS", "UPTIME", "HEALTH"}}, rows...))
+	header := []string{"NAME", "TYPE", "ENABLED", "ACTIVE", "PORT", "GPU", "COMFYUI", "RSS", "VRAM", "QUEUE", "OK/ERR", "RESTARTS", "UPTIME", "HEALTH"}
+	for i := range header {
+		header[i] = ui.Dim(header[i])
+	}
+	for _, r := range rows {
+		paintRow(r)
+	}
+	ui.Table(append([][]string{header}, rows...))
 	if len(warnings) > 0 {
 		ui.Printf("\n")
 		for _, w := range warnings {
@@ -116,6 +125,19 @@ func statusRow(in *config.Instance) []string {
 		row[13] += "  " + ui.Yellow("draining")
 	}
 	return row
+}
+
+// paintRow colors a status row: the name cyan, yes/running green, empty values dim (health is colored when set).
+func paintRow(r []string) {
+	r[0] = ui.Cyan(r[0])
+	for i, v := range r[1:] {
+		switch v {
+		case "yes", "running":
+			r[i+1] = ui.Green(v)
+		case "-":
+			r[i+1] = ui.Dim(v)
+		}
+	}
 }
 
 // shortDuration prints the two largest units: 2d4h, 3h12m, 45m, 30s.
