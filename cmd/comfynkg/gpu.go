@@ -1,6 +1,7 @@
 package main
 
 import (
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -32,4 +33,23 @@ func parseApps(out string) map[int]float64 {
 		}
 	}
 	return m
+}
+
+var driverRe = regexp.MustCompile(`Driver Version: (\S+)\s+CUDA Version: (\S+)`)
+
+// driverVersions reads the NVIDIA driver and the CUDA version it supports from nvidia-smi's banner.
+// Empty without nvidia-smi.
+func driverVersions() (driver, cuda string) {
+	out, err := run.Output(run.Command(nil, "nvidia-smi"))
+	if err != nil {
+		return "", ""
+	}
+	return parseDriver(out)
+}
+
+func parseDriver(out string) (driver, cuda string) {
+	if m := driverRe.FindStringSubmatch(out); m != nil {
+		return m[1], m[2]
+	}
+	return "", ""
 }

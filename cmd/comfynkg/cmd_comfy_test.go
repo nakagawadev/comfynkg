@@ -56,3 +56,13 @@ func TestParseApps(t *testing.T) {
 		t.Errorf("parseApps = %v", got)
 	}
 }
+
+func TestParseDriver(t *testing.T) {
+	banner := "| NVIDIA-SMI 580.196.07             Driver Version: 580.196.07     CUDA Version: 13.0     |\n"
+	if d, c := parseDriver(banner); d != "580.196.07" || c != "13.0" {
+		t.Errorf("parseDriver = %q %q", d, c)
+	}
+	if d, _ := parseDriver("NVIDIA-SMI has failed"); d != "" {
+		t.Errorf("parseDriver on an error = %q", d)
+	}
+}

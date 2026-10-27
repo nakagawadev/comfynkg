@@ -127,8 +127,11 @@ func statusOnce(o statusOpts) error {
 
 func printStatus(c *config.Config, targets []*config.Instance, warnings []string) {
 	dot := ui.Dim(" · ")
-	ui.Printf("%s%s%s%s\n\n", ui.Yellow(c.HostLabel()), dot, ui.Cyan("comfynkg "+version),
-		ui.Dim(fmt.Sprintf(" · comfy-cli %s · uv %s", toolVersion("comfy"), toolVersion("uv"))))
+	tools := fmt.Sprintf(" · comfy-cli %s · uv %s", toolVersion("comfy"), toolVersion("uv"))
+	if driver, cuda := driverVersions(); driver != "" {
+		tools += fmt.Sprintf(" · driver %s · cuda %s", driver, cuda)
+	}
+	ui.Printf("%s%s%s%s\n\n", ui.Yellow(c.HostLabel()), dot, ui.Cyan("comfynkg "+version), ui.Dim(tools))
 
 	vram := gpuMemory()
 	rows := make([][]string, len(targets))
