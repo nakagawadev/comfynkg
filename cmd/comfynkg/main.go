@@ -89,7 +89,8 @@ func realMain(argv []string) int {
 	if cmd.needRoot && os.Geteuid() != 0 {
 		return report(usagef("%s must run as root", args[0]))
 	}
-	if args[0] != "run" {
+	// run starts ComfyUI from systemd; self-update and version must work even when uv is missing
+	if args[0] != "run" && args[0] != "self-update" && args[0] != "version" {
 		if _, err := lookPath("uv"); err != nil {
 			return report(errors.New("uv is required: install it in /usr/local/bin"))
 		}

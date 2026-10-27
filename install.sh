@@ -15,8 +15,9 @@ case "$(uname -m)" in
 esac
 if [ -n "${VERSION:-}" ]; then url=$repo/download/$VERSION; else url=$repo/latest/download; fi
 
-# uv, in /usr/local/bin so every user has it
-if ! command -v uv >/dev/null 2>&1; then
+# uv, in /usr/local/bin so every user has it (one in root's ~/.local/bin doesn't count: comfynkg
+# runs from systemd and plain ssh, without root's profile)
+if [ ! -x /usr/local/bin/uv ]; then
   echo "> installing uv"
   curl -fsSL https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/usr/local/bin UV_NO_MODIFY_PATH=1 sh
 fi
