@@ -4,6 +4,7 @@ package e2e
 
 import (
 	"fmt"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -80,11 +81,20 @@ echo "NODE_CLASS_MAPPINGS = {}" > %[2]s/custom_nodes/legacy_file.py'`, base, leg
 		t.Errorf("unknown node: exit %d", r.code)
 	}
 
+	// a classic Manager whose cm-cli.py breaks: the error says why (the typer/click clash seen in production)
+	cli := legacyDir + "/custom_nodes/ComfyUI-Manager/cm-cli.py"
+	os.WriteFile(cli, []byte(`raise TypeError("Secondary flag is not valid for non-boolean flag.")`+"\n"), 0o644)
+	sh(t, "chown comfy:comfy "+cli)
+	r0 := nkg(t, "create", "comfy_m", "--type", "image", "--port", "8197", "--gpu", "0", "--nodes-from", legacyDir, "--nodes-venv", legacyVenv)
+	if r0.code != 1 || !strings.Contains(r0.out, "custom_nodes/ComfyUI-Manager/cm-cli.py: TypeError: Secondary flag") || !strings.Contains(r0.out, "click<8.2") {
+		t.Errorf("broken classic Manager: exit %d", r0.code)
+	}
+
 	// no Manager at all: fails in seconds, nothing installed, nothing added to the file
 	sh(t, "rm -rf "+legacyDir+"/custom_nodes/ComfyUI-Manager")
 	start := time.Now()
 	r := nkg(t, "create", "comfy_m", "--type", "image", "--port", "8197", "--gpu", "0", "--nodes-from", legacyDir, "--nodes-venv", legacyVenv)
-	if r.code != 1 || !strings.Contains(r.out, "no ComfyUI-Manager can snapshot it") || strings.Contains(r.out, "installing ComfyUI") {
+	if r.code != 1 || !strings.Contains(r.out, "no classic ComfyUI-Manager in custom_nodes") || strings.Contains(r.out, "installing ComfyUI") {
 		t.Fatalf("source without a Manager: exit %d", r.code)
 	}
 	if d := time.Since(start); d > time.Minute {

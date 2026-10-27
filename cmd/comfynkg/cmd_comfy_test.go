@@ -2,6 +2,7 @@ package main
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 )
@@ -64,5 +65,14 @@ func TestParseDriver(t *testing.T) {
 	}
 	if d, _ := parseDriver("NVIDIA-SMI has failed"); d != "" {
 		t.Errorf("parseDriver on an error = %q", d)
+	}
+}
+
+func TestLegacyHint(t *testing.T) {
+	if got := legacyHint("TypeError: Secondary flag is not valid for non-boolean flag."); !strings.Contains(got, "click<8.2") {
+		t.Errorf("legacyHint = %q", got)
+	}
+	if got := legacyHint("ModuleNotFoundError: No module named 'git'"); got != "ModuleNotFoundError: No module named 'git'" {
+		t.Errorf("legacyHint changed an unknown error: %q", got)
 	}
 }

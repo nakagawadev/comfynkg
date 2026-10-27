@@ -193,15 +193,32 @@ func saveNodes(c *config.Config, in *config.Instance, src, venv string) (snap st
 	if err == nil {
 		return snap, cleanup, nil
 	}
+	why := []string{"comfy-cli: " + lastLine(err.Error())}
 	for _, dir := range legacyManagerDirs {
-		if _, lerr := run.Output(srcWS.LegacySnapshotCmd(dir, snap)); lerr == nil {
+		cli := filepath.Join("custom_nodes", dir, "cm-cli.py")
+		if _, serr := os.Stat(filepath.Join(src, cli)); serr != nil {
+			continue
+		}
+		_, lerr := run.Output(srcWS.LegacySnapshotCmd(dir, snap))
+		if lerr == nil {
 			ui.Line(p, "snapshot saved with the classic ComfyUI-Manager (custom_nodes/%s)", dir)
 			return snap, cleanup, nil
 		}
+		why = append(why, cli+": "+legacyHint(lastLine(lerr.Error())))
+	}
+	if len(why) == 1 {
+		why = append(why, "no classic ComfyUI-Manager in custom_nodes/{"+strings.Join(legacyManagerDirs, ",")+"}")
 	}
 	cleanup()
-	return "", nil, fmt.Errorf("no ComfyUI-Manager can snapshot it (comfy-cli: %w; no custom_nodes/{%s}/cm-cli.py that runs)\n%s",
-		err, strings.Join(legacyManagerDirs, ","), out)
+	return "", nil, fmt.Errorf("no ComfyUI-Manager can snapshot it:\n  %s\n%s", strings.Join(why, "\n  "), out)
+}
+
+// legacyHint adds the fix for a failure the classic Manager's cm-cli.py is known to hit.
+func legacyHint(msg string) string {
+	if strings.Contains(msg, "Secondary flag is not valid for non-boolean flag") {
+		msg += " (its old typer breaks with click >= 8.2: install 'click<8.2' in that venv, retry, then upgrade click back)"
+	}
+	return msg
 }
 
 // restoreNodes restores a snapshot from saveNodes into the new instance, then its single-file nodes.
