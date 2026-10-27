@@ -1,11 +1,13 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -598,7 +600,14 @@ func cmdUpdate(args []string) error {
 			nodes = []string{"all"}
 		}
 		return canary(c, targets, "updating nodes", func(in *config.Instance) (func() error, error) {
-			return nil, workspace(c, in).Run(ui.Out, append([]string{"node", "update"}, nodes...)...)
+			// --mode remote: with its cached registry data, Manager reports registry nodes as not installed.
+			// A registry node switches version at ComfyUI's next start, which the canary restart covers.
+			var out bytes.Buffer
+			err := workspace(c, in).Run(io.MultiWriter(ui.Out, &out), append(append([]string{"node", "update"}, nodes...), "--mode", "remote")...)
+			if err == nil {
+				err = skippedNodes(out.String())
+			}
+			return nil, err
 		})
 	}
 	return usagef("update: core, nodes or cli")
@@ -681,3 +690,22 @@ func envOr(key, def string) string {
 }
 
 func fileExists(p string) bool { _, err := os.Stat(p); return err == nil }
+
+// skippedNodes turns cm-cli's "[  SKIPPED  ]: <node> => Not installed|Disabled" lines, which exit 0, into an error.
+func skippedNodes(out string) error {
+	var names []string
+	for _, l := range strings.Split(out, "\n") {
+		_, rest, ok := strings.Cut(l, "[  SKIPPED  ]:")
+		if !ok {
+			continue
+		}
+		name, why, _ := strings.Cut(rest, "=>")
+		if why = strings.TrimSpace(why); why == "Not installed" || why == "Disabled" {
+			names = append(names, strings.TrimSpace(name)+" ("+strings.ToLower(why)+")")
+		}
+	}
+	if len(names) > 0 {
+		return fmt.Errorf("not updated: %s", strings.Join(names, ", "))
+	}
+	return nil
+}

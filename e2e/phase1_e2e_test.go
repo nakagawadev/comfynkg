@@ -58,7 +58,7 @@ func TestPhase1(t *testing.T) {
 		t.Fatalf("comfy_a runs as %q", u)
 	}
 	cmdline := sh(t, "tr '\\0' ' ' < /proc/$(systemctl show -p MainPID --value comfynkg-comfy_b)/cmdline")
-	contains(t, cmdline, "main.py --listen 127.0.0.1,"+vmIP(t), "--port 8189", "--extra-model-paths-config /home/comfy/config/video/extra_model_paths.yaml", "--disable-metadata --cpu")
+	contains(t, cmdline, "main.py --listen 127.0.0.1,"+vmIP(t), "--port 8189", "--extra-model-paths-config /home/comfy/config/video/extra_model_paths.yaml", "--disable-metadata --cpu --enable-manager --disable-manager-ui")
 	contains(t, sh(t, "journalctl -u comfynkg-comfy_b --no-pager -o cat | grep 'comfynkg run comfy_b:'"), "comfynkg run comfy_b: /home/comfy/instances/comfy_b/.venv/bin/python main.py")
 
 	out = mustOK(t, "status")

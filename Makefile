@@ -29,7 +29,7 @@ vm-install: ## build for the VM and install it as /usr/local/bin/comfynkg
 
 e2e: vm-install ## run the e2e tests inside the VM as root
 	CGO_ENABLED=0 GOOS=linux GOARCH=$(VMARCH) go test -c -tags e2e -o dist/e2e.test ./e2e
-	orb -m $(VM) -u root bash -c 'cd $(CURDIR)/e2e && $(CURDIR)/dist/e2e.test -test.v -test.timeout 60m'
+	orb -m $(VM) -u root bash -c 'cd $(CURDIR)/e2e && $(CURDIR)/dist/e2e.test -test.v -test.timeout 60m $(if $(RUN),-test.run $(RUN))'
 
 dev-node: ## create the sync worker VM, trust the dev VM's key, name it node0 in the dev VM
 	orb list | grep -q '^comfynkg-node ' || orb create ubuntu:24.04 comfynkg-node

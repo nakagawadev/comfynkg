@@ -81,7 +81,19 @@ func comfyArgv(c *config.Config, in *config.Instance, ip string) ([]string, erro
 		"--cuda-device", strconv.Itoa(*in.GPU),
 		"--extra-model-paths-config", c.Models[in.Type],
 	}
-	return append(argv, extra...), nil
+	return append(argv, managerFlags(extra)...), nil
+}
+
+// managerFlags turns on ComfyUI-Manager without its UI and endpoints unless the flags already
+// choose a Manager mode: Manager applies node version switches (update nodes) at startup, and
+// its endpoints can install code, so they stay off by default.
+func managerFlags(extra []string) []string {
+	for _, f := range extra {
+		if strings.HasPrefix(f, "--enable-manager") || f == "--disable-manager-ui" {
+			return extra
+		}
+	}
+	return append(extra, "--enable-manager", "--disable-manager-ui")
 }
 
 // tailscaleIP returns the Tailscale IPv4, retrying every 2 s up to wait.

@@ -20,6 +20,7 @@ type Workspace struct {
 // Cmd builds `comfy --skip-prompt --workspace <path> <args>` as the owner.
 func (w Workspace) Cmd(args ...string) *exec.Cmd {
 	cmd := run.Command(w.Owner, "comfy", append([]string{"--skip-prompt", "--workspace", w.Path}, args...)...)
+	cmd.Env = append(cmd.Env, "COLUMNS=200") // rich wraps at 80 columns otherwise, splitting the lines comfynkg parses
 	if w.Venv != "" {
 		cmd.Env = append(cmd.Env, "VIRTUAL_ENV="+w.Venv)
 	}

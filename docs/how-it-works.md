@@ -14,6 +14,8 @@ Drain lives in memory, so a restarted instance always comes back taking prompts.
 
 comfynkg calls [comfy-cli](https://github.com/Comfy-Org/comfy-cli) for installs, custom nodes and snapshots, always as the owner and always on the instance's own folder. `create --nodes-from` copies the custom nodes of an existing install through a snapshot, taken before installing anything. Older installs that only have the classic ComfyUI-Manager clone in `custom_nodes` work too.
 
+ComfyUI starts with `--enable-manager --disable-manager-ui` unless your flags pick another Manager mode: Manager's background work (like switching a registry node's version at startup) runs, but its UI and install endpoints stay off.
+
 `update core` and `update nodes` snapshot every target first, then update one instance (the canary), restart it with `--wait` and check its health. If it fails, that instance is rolled back and the run stops; if it works, the rest follow one at a time.
 
 ## Takeover
