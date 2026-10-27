@@ -28,4 +28,8 @@ The server with a `sync:` section runs one `comfynkg-sync@<type>` unit per model
 
 ## Health and status
 
-comfynkg talks to every instance on `127.0.0.1`: `/system_stats` for health and version, `/queue` for the queue, and the node's `/nkg/metrics` and `/nkg/drain` when it is installed.
+comfynkg talks to every instance on `127.0.0.1`: `/system_stats` for health and version, `/queue` for the queue, and the node's `/nkg/metrics` (RSS, prompts ok/error) and `/nkg/drain` when it is installed. systemd gives the state, restarts and uptime; `nvidia-smi` gives each instance's VRAM (by process), the GPU model, and the driver and CUDA version in the header.
+
+An instance that is active but doesn't answer yet shows `starting` for its first 2 minutes (ComfyUI loads its custom nodes before it answers), then `down`.
+
+With `hosts:` in the config, `status` also runs `comfynkg status --local` on each of those servers over SSH, as the owner of the instances, and prints their tables below. A server that doesn't answer shows as `unreachable`.

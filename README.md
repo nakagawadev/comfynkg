@@ -44,10 +44,11 @@ done: 0 restarted, 1 started, 1 unchanged
 
 ## Features
 
-- **Declarative**: `apply` makes systemd match the file. Each instance gets its own unit, venv and GPU.
+- **Declarative**: `apply` makes systemd match the file. Each instance gets its own unit and venv, on the GPU you pick (several can share one).
 - **Restarts that wait**: `restart --wait` waits for the queue to empty before restarting. With the [comfyui_nakagawa](https://github.com/nakagawadev/comfyui_nakagawa) node installed, the instance also drains first (new prompts get `503`); a timeout turns drain off and skips it.
 - **Safe updates**: `update core|nodes` takes a snapshot, updates one instance first, checks it comes back healthy and rolls back if not.
 - **Migration**: `takeover` swaps an existing hand-made unit for a managed one on the same port.
+- **One view of every server**: `status` shows each instance's state, GPU, VRAM, queue, prompts ok/error, uptime and health, plus the other servers listed in `hosts:` (asked over SSH). `status -w` keeps it live. Read-only commands work as any user.
 - **Model sync**: one server pushes model folders to the others with `rsync` over SSH, with a guard that refuses `--delete` when the source looks empty.
 - **Private by default**: ComfyUI listens on `127.0.0.1` and the server's [Tailscale](https://tailscale.com) address only.
 - **Unprivileged instances**: every process and file belongs to one ordinary user. Root never reads or writes inside that user's folders directly.
@@ -55,10 +56,10 @@ done: 0 restarted, 1 started, 1 unchanged
 ## Requirements
 
 - Linux with systemd, amd64 or arm64.
-- [uv](https://docs.astral.sh/uv/) (comfy-cli is installed with it).
+- [uv](https://docs.astral.sh/uv/) in `/usr/local/bin` (install.sh puts it there; comfy-cli is installed with it).
 - Tailscale, up on the server.
 - NVIDIA GPUs.
-- Optional: the [comfyui_nakagawa](https://github.com/nakagawadev/comfyui_nakagawa) custom node, for drain mode and memory/queue stats in `status`. Without it, restarts just wait for the queue.
+- Optional: the [comfyui_nakagawa](https://github.com/nakagawadev/comfyui_nakagawa) custom node, for drain mode, and RSS and prompt ok/error counts in `status`. Without it, restarts just wait for the queue.
 
 ## Install
 
@@ -73,10 +74,10 @@ curl -fsSL https://raw.githubusercontent.com/nakagawadev/comfynkg/main/install.s
 ```bash
 curl -fsSLO https://raw.githubusercontent.com/nakagawadev/comfynkg/main/install.sh
 less install.sh
-VERSION=v0.1.3 sh install.sh
+VERSION=v0.2.2 sh install.sh
 ```
 
-Later updates of comfynkg alone: `comfynkg self-update` (or `self-update v0.2.0`).
+Later updates of comfynkg alone: `comfynkg self-update` (or `self-update v0.2.2`).
 
 ## Quick start
 
@@ -94,7 +95,7 @@ comfynkg status
 
 | Command | Does |
 |---|---|
-| `status` | Every instance: state, port, GPU, version, RSS, VRAM, queue, health |
+| `status [-w]` | Every instance, here and on the servers in `hosts:`: state, GPU, VRAM, queue, ok/errors, uptime, health; `-w` refreshes every 2 s |
 | `apply [--dry-run]` | Make systemd match the file |
 | `restart <inst\|all> --wait` | Drain, wait for the queue, restart |
 | `logs <inst> -f` | Follow the instance's journal |
