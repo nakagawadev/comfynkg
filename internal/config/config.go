@@ -217,6 +217,10 @@ func (c *Config) Validate() (warnings []string, err error) {
 		bad("root: %s is owned by root; instances must belong to an unprivileged user", c.Root)
 	} else {
 		c.Owner = owner
+		if dirs := DotDirsToCreate(owner.Home, owner.UID); len(dirs) > 0 {
+			warnings = append(warnings, fmt.Sprintf("%s can't write in its home %s (a Hestia user?), and tools that keep files there fail at run time; create them: install -d -o %s -g %s -m 700 %s",
+				owner.Name, owner.Home, owner.Name, owner.Name, strings.Join(dirs, " ")))
+		}
 	}
 	if c.MemoryMax != "" && !memoryRe.MatchString(c.MemoryMax) {
 		bad("memory_max: %q is not a systemd size (like 48G)", c.MemoryMax)
@@ -337,6 +341,33 @@ func sortedKeys[V any](m map[int]V) []int {
 }
 
 // fileOwner returns the uid and gid of a file (ok is false off Unix).
+// homeDotDirs are the folders uv, comfy-cli, pip, Hugging Face, Ultralytics (.cache, .config, .local),
+// Triton (.triton) and the CUDA cache (.nv) create in the owner's home.
+var homeDotDirs = []string{".cache", ".config", ".local", ".triton", ".nv"}
+
+// DotDirsToCreate lists the usual dot folders the owner (uid) can't create itself: none when it owns its
+// home, otherwise the ones that are missing or not its own. On Hestia the home belongs to root.
+func DotDirsToCreate(home string, uid int) []string {
+	fi, err := os.Stat(home)
+	if err != nil {
+		return nil
+	}
+	if huid, _, ok := fileOwner(fi); !ok || huid == uid || fi.Mode().Perm()&0o002 != 0 {
+		return nil
+	}
+	var out []string
+	for _, d := range homeDotDirs {
+		p := filepath.Join(home, d)
+		if fi, err := os.Lstat(p); err == nil && fi.IsDir() {
+			if duid, _, ok := fileOwner(fi); ok && duid == uid {
+				continue
+			}
+		}
+		out = append(out, p)
+	}
+	return out
+}
+
 func fileOwner(fi os.FileInfo) (uid, gid int, ok bool) {
 	st, ok := fi.Sys().(*syscall.Stat_t)
 	if !ok {

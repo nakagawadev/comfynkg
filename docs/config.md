@@ -53,7 +53,7 @@ comfy_b:
 
 comfynkg always sets `--listen 127.0.0.1,<Tailscale IP>`, `--port`, `--cuda-device` and `--extra-model-paths-config`; putting them in `flags` is an error.
 
-Warnings (the command still runs): an instance without `--disable-metadata`, two enabled instances on the same GPU, an enabled instance whose folder doesn't exist yet.
+Warnings (the command still runs): an instance without `--disable-metadata`, two enabled instances on the same GPU, an enabled instance whose folder doesn't exist yet, and an owner that can't write in its own home (Hestia leaves it to root) while the folders tools keep there (`.cache`, `.config`, `.local`, `.triton`, `.nv`) are missing; the warning prints the `install -d` that creates them.
 
 ## Changing the file
 

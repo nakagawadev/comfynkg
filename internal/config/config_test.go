@@ -237,3 +237,16 @@ plugin:
 		t.Errorf("err = %v", err)
 	}
 }
+
+func TestDotDirsToCreate(t *testing.T) {
+	home := t.TempDir()
+	os.Mkdir(filepath.Join(home, ".cache"), 0o700)
+	if got := DotDirsToCreate(home, os.Getuid()); got != nil {
+		t.Errorf("own home: %v", got)
+	}
+	// a home someone else owns (root on Hestia): every usual folder not owned by uid is listed
+	other := os.Getuid() + 1
+	if got := DotDirsToCreate(home, other); len(got) != 5 || got[0] != filepath.Join(home, ".cache") {
+		t.Errorf("foreign home: %v", got)
+	}
+}
