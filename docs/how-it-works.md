@@ -2,7 +2,7 @@
 
 ## Units
 
-`apply` writes one systemd unit per instance, `comfynkg-<inst>.service`, running as the owner of `root`. The unit doesn't hold any ComfyUI flags: its `ExecStart` is `comfynkg run <inst>`, which reads the file, waits for the Tailscale IP, logs the full command and `exec`s ComfyUI from the instance's own venv. Changing a flag means editing the file and restarting; `apply` restarts only instances whose unit changed. Units of instances removed from the file are stopped and deleted. Hand-made units are never touched.
+`apply` writes one systemd unit per instance, `comfynkg-<inst>.service`, running as the owner of `root`. The unit doesn't hold any ComfyUI flags: its `ExecStart` is `comfynkg run <inst>`, which reads the file, waits for the Tailscale IP, logs the full command and `exec`s ComfyUI from the instance's own venv, with GPUs numbered as `nvidia-smi` numbers them (`CUDA_DEVICE_ORDER=PCI_BUS_ID`). Changing a flag means editing the file and restarting; `apply` restarts only instances whose unit changed. Units of instances removed from the file are stopped and deleted. Hand-made units are never touched.
 
 ## Restarts and drain
 

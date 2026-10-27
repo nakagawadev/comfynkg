@@ -76,3 +76,12 @@ func TestLegacyHint(t *testing.T) {
 		t.Errorf("legacyHint changed an unknown error: %q", got)
 	}
 }
+
+func TestRunEnv(t *testing.T) {
+	if got := runEnv([]string{"A=1"}); !reflect.DeepEqual(got, []string{"A=1", "CUDA_DEVICE_ORDER=PCI_BUS_ID"}) {
+		t.Errorf("runEnv = %v", got)
+	}
+	if got := runEnv([]string{"CUDA_DEVICE_ORDER=FASTEST_FIRST"}); len(got) != 1 {
+		t.Errorf("runEnv overrode an explicit order: %v", got)
+	}
+}

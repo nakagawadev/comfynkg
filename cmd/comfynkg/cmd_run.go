@@ -65,7 +65,19 @@ func cmdRun(args []string) error {
 	if err := os.Chdir(c.Dir(in)); err != nil {
 		return err
 	}
-	return syscall.Exec(argv[0], argv, os.Environ())
+	return syscall.Exec(argv[0], argv, runEnv(os.Environ()))
+}
+
+// runEnv numbers GPUs the way nvidia-smi does (PCI bus order) unless the environment says
+// otherwise. CUDA's default puts the fastest first, so on a server with mixed GPUs `gpu: 0`
+// could land on a card that isn't nvidia-smi's 0.
+func runEnv(env []string) []string {
+	for _, kv := range env {
+		if strings.HasPrefix(kv, "CUDA_DEVICE_ORDER=") {
+			return env
+		}
+	}
+	return append(env, "CUDA_DEVICE_ORDER=PCI_BUS_ID")
 }
 
 // comfyArgv builds the ComfyUI command line.
