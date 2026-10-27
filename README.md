@@ -61,22 +61,18 @@ done: 0 restarted, 1 started, 1 unchanged
 As root, on each server:
 
 ```bash
-# comfy-cli, shared by every user
-UV_TOOL_DIR=/opt/comfynkg/tools UV_TOOL_BIN_DIR=/usr/local/bin UV_PYTHON_INSTALL_DIR=/opt/comfynkg/python \
-  uv tool install comfy-cli
-chmod -R a+rX /opt/comfynkg
-
-# comfynkg
-v=v0.1.0; a=amd64   # or arm64
-cd /tmp
-curl -fsSLO https://github.com/nakagawadev/comfynkg/releases/download/$v/comfynkg-linux-$a
-curl -fsSLO https://github.com/nakagawadev/comfynkg/releases/download/$v/SHA256SUMS
-sha256sum -c --ignore-missing SHA256SUMS
-install -o root -g root -m 755 comfynkg-linux-$a /usr/local/bin/comfynkg
-comfynkg version
+curl -fsSL https://raw.githubusercontent.com/nakagawadev/comfynkg/main/install.sh | sh
 ```
 
-Later updates: `comfynkg self-update` installs the latest release (or `self-update v0.2.0` for a given one).
+[install.sh](install.sh) installs uv (if missing), comfy-cli for every user and the latest comfynkg release for your architecture, checked against its `SHA256SUMS`. Running it again upgrades everything. To read it first, or to pick a release:
+
+```bash
+curl -fsSLO https://raw.githubusercontent.com/nakagawadev/comfynkg/main/install.sh
+less install.sh
+VERSION=v0.1.3 sh install.sh
+```
+
+Later updates of comfynkg alone: `comfynkg self-update` (or `self-update v0.2.0`).
 
 ## Quick start
 
