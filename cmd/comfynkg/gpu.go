@@ -53,3 +53,40 @@ func parseDriver(out string) (driver, cuda string) {
 	}
 	return "", ""
 }
+
+// gpuNames maps nvidia-smi's GPU index to a short model name (L4, 4000Ada, 5090). nil without nvidia-smi.
+func gpuNames() map[int]string {
+	out, err := run.Output(run.Command(nil, "nvidia-smi", "--query-gpu=index,name", "--format=csv,noheader"))
+	if err != nil {
+		return nil
+	}
+	m := map[int]string{}
+	for _, l := range strings.Split(out, "\n") {
+		idx, name, ok := strings.Cut(l, ",")
+		if i, err := strconv.Atoi(strings.TrimSpace(idx)); ok && err == nil {
+			m[i] = shortGPU(name)
+		}
+	}
+	return m
+}
+
+// shortGPU drops the brand words from a GPU name: "NVIDIA RTX 4000 SFF Ada Generation" is 4000Ada,
+// "NVIDIA GeForce RTX 5090" is 5090, "NVIDIA L4" is L4.
+func shortGPU(name string) string {
+	var words []string
+	for _, w := range strings.Fields(name) {
+		switch w {
+		case "NVIDIA", "GeForce", "RTX", "Tesla", "SFF", "Generation":
+		default:
+			words = append(words, w)
+		}
+	}
+	if len(words) == 0 {
+		return ""
+	}
+	// a model like L4 or A100 says it all; a bare number (4000) needs the next word (Ada)
+	if strings.Trim(words[0], "0123456789") != "" || len(words) == 1 {
+		return words[0]
+	}
+	return words[0] + words[1]
+}

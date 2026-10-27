@@ -85,3 +85,18 @@ func TestRunEnv(t *testing.T) {
 		t.Errorf("runEnv overrode an explicit order: %v", got)
 	}
 }
+
+func TestShortGPU(t *testing.T) {
+	for name, want := range map[string]string{
+		"NVIDIA L4":                          "L4",
+		"NVIDIA RTX 4000 SFF Ada Generation": "4000Ada",
+		"NVIDIA GeForce RTX 5090":            "5090",
+		"NVIDIA A100-SXM4-40GB":              "A100-SXM4-40GB",
+		"Tesla T4":                           "T4",
+		"NVIDIA RTX A6000":                   "A6000",
+	} {
+		if got := shortGPU(name); got != want {
+			t.Errorf("shortGPU(%q) = %q, want %q", name, got, want)
+		}
+	}
+}

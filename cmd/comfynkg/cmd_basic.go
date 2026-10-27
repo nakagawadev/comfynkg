@@ -133,7 +133,7 @@ func printStatus(c *config.Config, targets []*config.Instance, warnings []string
 	}
 	ui.Printf("%s%s%s%s\n\n", ui.Yellow(c.HostLabel()), dot, ui.Cyan("comfynkg "+version), ui.Dim(tools))
 
-	vram := gpuMemory()
+	vram, names := gpuMemory(), gpuNames()
 	rows := make([][]string, len(targets))
 	var wg sync.WaitGroup
 	for i, in := range targets {
@@ -141,6 +141,9 @@ func printStatus(c *config.Config, targets []*config.Instance, warnings []string
 		go func() {
 			defer wg.Done()
 			rows[i] = statusRow(in, vram)
+			if n := names[*in.GPU]; n != "" {
+				rows[i][5] += " " + n
+			}
 		}()
 	}
 	wg.Wait()
