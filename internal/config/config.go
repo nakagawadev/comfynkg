@@ -235,7 +235,6 @@ func (c *Config) Validate() (warnings []string, err error) {
 	}
 
 	ports := map[int]string{}
-	gpus := map[int][]string{}
 	for _, in := range c.Instances {
 		p := in.Name
 		if !isType(in.Type) {
@@ -254,8 +253,6 @@ func (c *Config) Validate() (warnings []string, err error) {
 		}
 		if in.GPU == nil || *in.GPU < 0 {
 			bad("%s.gpu: required", p)
-		} else if in.Enabled {
-			gpus[*in.GPU] = append(gpus[*in.GPU], p)
 		}
 		if in.MemoryMax != "" && !memoryRe.MatchString(in.MemoryMax) {
 			bad("%s.memory_max: %q is not a systemd size", p, in.MemoryMax)
@@ -279,11 +276,6 @@ func (c *Config) Validate() (warnings []string, err error) {
 			if _, e := os.Stat(c.Dir(in)); e != nil {
 				warnings = append(warnings, fmt.Sprintf("%s is enabled but %s does not exist (create it first)", p, c.Dir(in)))
 			}
-		}
-	}
-	for _, g := range sortedKeys(gpus) {
-		if names := gpus[g]; len(names) > 1 {
-			warnings = append(warnings, fmt.Sprintf("%s share gpu %d", strings.Join(names, " and "), g))
 		}
 	}
 	errs = append(errs, c.validateSync()...)
@@ -329,15 +321,6 @@ func contains(list []string, s string) bool {
 		}
 	}
 	return false
-}
-
-func sortedKeys[V any](m map[int]V) []int {
-	keys := make([]int, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-	sort.Ints(keys)
-	return keys
 }
 
 // fileOwner returns the uid and gid of a file (ok is false off Unix).

@@ -163,10 +163,13 @@ comfy_9:
 		t.Fatal(err)
 	}
 	all := strings.Join(warnings, "\n")
-	for _, want := range []string{"comfy_0 has no --disable-metadata", "comfy_0 and comfy_9 share gpu 0", "comfy_9 is enabled but"} {
+	for _, want := range []string{"comfy_0 has no --disable-metadata", "comfy_9 is enabled but"} {
 		if !strings.Contains(all, want) {
 			t.Errorf("missing warning %q in:\n%s", want, all)
 		}
+	}
+	if strings.Contains(all, "share gpu") {
+		t.Errorf("sharing a GPU is not a warning:\n%s", all)
 	}
 }
 
