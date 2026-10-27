@@ -158,11 +158,12 @@ type State struct {
 	Restarts string
 	Exists   bool
 	Uptime   time.Duration // since it became active; 0 when not active or unknown
+	PID      int           // MainPID: ComfyUI itself, since `comfynkg run` execs it
 }
 
 // StateOf reports whether a unit exists, is enabled, is active, how often it restarted and for how long it's up.
 func StateOf(unit string) (State, error) {
-	p, err := Props(unit, "UnitFileState", "ActiveState", "NRestarts", "LoadState", "ActiveEnterTimestampMonotonic")
+	p, err := Props(unit, "UnitFileState", "ActiveState", "NRestarts", "LoadState", "ActiveEnterTimestampMonotonic", "MainPID")
 	if err != nil {
 		return State{}, err
 	}
@@ -174,6 +175,7 @@ func StateOf(unit string) (State, error) {
 	}
 	if st.Active == "active" {
 		st.Uptime = uptime(p["ActiveEnterTimestampMonotonic"])
+		st.PID, _ = strconv.Atoi(p["MainPID"])
 	}
 	return st, nil
 }

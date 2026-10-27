@@ -130,13 +130,14 @@ func printStatus(c *config.Config, targets []*config.Instance, warnings []string
 	ui.Printf("%s%s%s%s\n\n", ui.Yellow(c.HostLabel()), dot, ui.Cyan("comfynkg "+version),
 		ui.Dim(fmt.Sprintf(" · comfy-cli %s · uv %s", toolVersion("comfy"), toolVersion("uv"))))
 
+	vram := gpuMemory()
 	rows := make([][]string, len(targets))
 	var wg sync.WaitGroup
 	for i, in := range targets {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			rows[i] = statusRow(in)
+			rows[i] = statusRow(in, vram)
 		}()
 	}
 	wg.Wait()
@@ -221,7 +222,9 @@ func lastLine(s string) string {
 	return strings.TrimSpace(lines[len(lines)-1])
 }
 
-func statusRow(in *config.Instance) []string {
+// statusRow builds one line of the table. vram is per-PID usage from nvidia-smi; without it
+// (no NVIDIA GPU) VRAM falls back to what PyTorch has reserved, from the plugin.
+func statusRow(in *config.Instance, vram map[int]float64) []string {
 	ctx := context.Background()
 	yes := map[bool]string{true: "yes", false: "no"}
 	row := []string{in.Name, in.Type, yes[in.Enabled], "no unit", strconv.Itoa(in.Port), strconv.Itoa(*in.GPU), "-", "-", "-", "-", "-", "-", "-", "-"}
@@ -255,6 +258,9 @@ func statusRow(in *config.Instance) []string {
 	}
 	if m, ok, _ := cl.Metrics(ctx); ok {
 		row[7], row[8], row[10] = ui.Bytes(m.RSS), ui.Bytes(m.VRAM), fmt.Sprintf("%.0f/%.0f", m.OK, m.Err)
+	}
+	if vram != nil {
+		row[8] = ui.Bytes(vram[st.PID]) // 0B: ComfyUI holds nothing on the GPU yet
 	}
 	if d, err := cl.DrainStatus(ctx); err == nil && d.Draining {
 		row[13] += "  " + ui.Yellow("draining")

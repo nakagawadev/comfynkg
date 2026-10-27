@@ -49,3 +49,10 @@ func TestShellQuote(t *testing.T) {
 		t.Errorf("lastLine = %q", got)
 	}
 }
+
+func TestParseApps(t *testing.T) {
+	got := parseApps("1234, 16800\n5678, 6900\n1234, 100\n[N/A], [N/A]\n")
+	if got[1234] != 16900*1024*1024 || got[5678] != 6900*1024*1024 || len(got) != 2 {
+		t.Errorf("parseApps = %v", got)
+	}
+}
