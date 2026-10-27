@@ -119,6 +119,16 @@ func cmdCreate(args []string) error {
 		return nil
 	}
 
+	// Snapshot the source before installing, so a source comfynkg can't read fails in seconds.
+	snap := ""
+	if src != "" {
+		var cleanup func()
+		if snap, cleanup, err = saveNodes(next, in, src, *fromVenv); err != nil {
+			return fmt.Errorf("%s: copy nodes from %s: %w", name, src, err)
+		}
+		defer cleanup()
+	}
+
 	w := workspace(next, in)
 	installArgs, _ := config.SplitArgs(envOr("COMFYNKG_INSTALL_ARGS", "--nvidia"))
 	if *ver != "" {
@@ -130,9 +140,9 @@ func cmdCreate(args []string) error {
 		return fmt.Errorf("%s: install: %w (remove %s before retrying)", name, err, dir)
 	}
 	ui.Line(p, "installed (%s)", ui.Dur(time.Since(start)))
-	if src != "" {
-		if err := copyNodes(next, in, src, *fromVenv); err != nil {
-			return fmt.Errorf("%s: copy nodes: %w", name, err)
+	if snap != "" {
+		if err := restoreNodes(next, in, src, snap); err != nil {
+			return fmt.Errorf("%s: copy nodes: %w (remove %s before retrying)", name, err, dir)
 		}
 	}
 	if err := config.WriteFile(g.config, data); err != nil {
@@ -145,9 +155,59 @@ func cmdCreate(args []string) error {
 	return nil
 }
 
-// copyNodes snapshots src (as its own owner) and restores the snapshot into the new instance.
-func copyNodes(c *config.Config, in *config.Instance, src, venv string) error {
+// legacyManagerDirs are the usual folder names of a classic ComfyUI-Manager clone.
+var legacyManagerDirs = []string{"ComfyUI-Manager", "comfyui-manager"}
+
+// saveNodes snapshots the custom nodes of src as its own owner, into a temp dir that cleanup removes.
+// comfy-cli needs the pip comfyui_manager package; older installs only have a Manager clone in
+// custom_nodes, so its cm-cli.py is tried next.
+func saveNodes(c *config.Config, in *config.Instance, src, venv string) (snap string, cleanup func(), err error) {
 	p := prefix(c, in)
+	fi, err := os.Stat(src)
+	if err != nil {
+		return "", nil, err
+	}
+	srcOwner, err := config.OwnerOf(fi)
+	if err != nil {
+		return "", nil, err
+	}
+	tmp, err := os.MkdirTemp("", "comfynkg-nodes-")
+	if err != nil {
+		return "", nil, err
+	}
+	cleanup = func() { os.RemoveAll(tmp) }
+	if err := os.Chmod(tmp, 0o755); err != nil {
+		cleanup()
+		return "", nil, err
+	}
+	if err := os.Chown(tmp, srcOwner.UID, srcOwner.GID); err != nil {
+		cleanup()
+		return "", nil, err
+	}
+	snap = filepath.Join(tmp, "snapshot.json")
+	ui.Line(p, "saving a snapshot of the custom nodes in %s...", src)
+	srcWS := comfycli.Workspace{Path: src, Owner: &run.User{Name: srcOwner.Name, Home: srcOwner.Home}, Venv: venv, Prefix: p}
+	out, err := run.Output(srcWS.Cmd("node", "save-snapshot", "--output", snap))
+	if err == nil {
+		return snap, cleanup, nil
+	}
+	for _, dir := range legacyManagerDirs {
+		if _, lerr := run.Output(srcWS.LegacySnapshotCmd(dir, snap)); lerr == nil {
+			ui.Line(p, "snapshot saved with the classic ComfyUI-Manager (custom_nodes/%s)", dir)
+			return snap, cleanup, nil
+		}
+	}
+	cleanup()
+	return "", nil, fmt.Errorf("no ComfyUI-Manager can snapshot it (comfy-cli: %w; no custom_nodes/{%s}/cm-cli.py that runs)\n%s",
+		err, strings.Join(legacyManagerDirs, ","), out)
+}
+
+// restoreNodes restores a snapshot from saveNodes into the new instance, then its single-file nodes.
+func restoreNodes(c *config.Config, in *config.Instance, src, snap string) error {
+	ui.Line(prefix(c, in), "copying custom nodes from %s...", src)
+	if err := workspace(c, in).Run(ui.Out, "node", "restore-snapshot", snap); err != nil {
+		return err
+	}
 	fi, err := os.Stat(src)
 	if err != nil {
 		return err
@@ -156,27 +216,7 @@ func copyNodes(c *config.Config, in *config.Instance, src, venv string) error {
 	if err != nil {
 		return err
 	}
-	tmp, err := os.MkdirTemp("", "comfynkg-nodes-")
-	if err != nil {
-		return err
-	}
-	defer os.RemoveAll(tmp)
-	if err := os.Chmod(tmp, 0o755); err != nil {
-		return err
-	}
-	if err := os.Chown(tmp, srcOwner.UID, srcOwner.GID); err != nil {
-		return err
-	}
-	snap := filepath.Join(tmp, "snapshot.json")
-	ui.Line(p, "copying custom nodes from %s...", src)
-	srcWS := comfycli.Workspace{Path: src, Owner: &run.User{Name: srcOwner.Name, Home: srcOwner.Home}, Venv: venv, Prefix: p}
-	if out, err := run.Output(srcWS.Cmd("node", "save-snapshot", "--output", snap)); err != nil {
-		return fmt.Errorf("%w\n%s", err, out)
-	}
-	if err := workspace(c, in).Run(ui.Out, "node", "restore-snapshot", snap); err != nil {
-		return err
-	}
-	return copyFileNodes(c, in, src, snap, srcWS.Owner)
+	return copyFileNodes(c, in, src, snap, &run.User{Name: srcOwner.Name, Home: srcOwner.Home})
 }
 
 // copyFileNodes copies single-file custom nodes, which Manager lists in a snapshot but doesn't restore.

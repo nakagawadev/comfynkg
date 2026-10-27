@@ -4,6 +4,7 @@ package comfycli
 import (
 	"io"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
 	"comfynkg/internal/run"
@@ -22,6 +23,20 @@ func (w Workspace) Cmd(args ...string) *exec.Cmd {
 	if w.Venv != "" {
 		cmd.Env = append(cmd.Env, "VIRTUAL_ENV="+w.Venv)
 	}
+	return cmd
+}
+
+// LegacySnapshotCmd saves a node snapshot with a classic ComfyUI-Manager clone
+// (custom_nodes/<managerDir>/cm-cli.py), for installs older than the pip comfyui_manager
+// package that comfy-cli needs. The snapshot format is the same.
+func (w Workspace) LegacySnapshotCmd(managerDir, output string) *exec.Cmd {
+	venv := w.Venv
+	if venv == "" {
+		venv = filepath.Join(w.Path, ".venv")
+	}
+	cmd := run.Command(w.Owner, filepath.Join(venv, "bin", "python"),
+		filepath.Join(w.Path, "custom_nodes", managerDir, "cm-cli.py"), "save-snapshot", "--output", output)
+	cmd.Env = append(cmd.Env, "COMFYUI_PATH="+w.Path, "VIRTUAL_ENV="+venv)
 	return cmd
 }
 
