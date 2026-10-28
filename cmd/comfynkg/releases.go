@@ -20,6 +20,34 @@ import (
 // keeps the latest stable versions. `status` only reads it: no network, no delay.
 var releasesPath = "/var/lib/comfynkg/releases.json"
 
+// releasesMaxAge: older than this, the file is stale and `status` says nothing.
+const releasesMaxAge = 7 * 24 * time.Hour
+
+// freshReleases returns the last check, if there is one recent enough to trust.
+func freshReleases() (Releases, bool) {
+	r, err := loadReleases()
+	return r, err == nil && time.Since(r.Checked) < releasesMaxAge
+}
+
+// releaseNotes are the lines `status` ends with when something newer is out, each with the command
+// that updates it. behind: some instance runs an older ComfyUI than r.ComfyUI.
+func releaseNotes(r Releases, behind bool, comfynkgVersion, cliVersion string) []string {
+	var out []string
+	note := func(what, cmd string) {
+		out = append(out, ui.Yellow(what+" is out")+ui.Dim(" · run: ")+ui.Cyan(cmd))
+	}
+	if behind {
+		note("ComfyUI "+r.ComfyUI, "comfynkg update core all")
+	}
+	if newer(r.Comfynkg, comfynkgVersion) {
+		note("comfynkg "+r.Comfynkg, "comfynkg self-update")
+	}
+	if newer(r.ComfyCLI, cliVersion) {
+		note("comfy-cli "+r.ComfyCLI, "comfynkg update cli")
+	}
+	return out
+}
+
 // Release sources; vars so tests can point them at a local server.
 var (
 	comfyUIReleaseURL  = "https://api.github.com/repos/comfyanonymous/ComfyUI/releases/latest"

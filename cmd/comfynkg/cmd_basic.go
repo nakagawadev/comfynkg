@@ -133,7 +133,8 @@ func statusOnce(o statusOpts) error {
 
 func printStatus(c *config.Config, targets []*config.Instance, warnings []string) {
 	dot := ui.Dim(" · ")
-	tools := fmt.Sprintf(" · comfy-cli %s · uv %s", toolVersion("comfy"), toolVersion("uv"))
+	cli := toolVersion("comfy")
+	tools := fmt.Sprintf(" · comfy-cli %s · uv %s", cli, toolVersion("uv"))
 	if driver, cuda := driverVersions(); driver != "" {
 		tools += fmt.Sprintf(" · driver %s · cuda %s", driver, cuda)
 	}
@@ -154,14 +155,24 @@ func printStatus(c *config.Config, targets []*config.Instance, warnings []string
 	}
 	wg.Wait()
 	header := []string{"NAME", "TYPE", "ENABLED", "ACTIVE", "PORT", "GPU", "COMFYUI", "RSS", "VRAM", "QUEUE", "OK/ERR", "RESTARTS", "UPTIME", "HEALTH"}
+	rel, fresh := freshReleases()
+	behind := false
 	for _, r := range rows {
 		paintRow(r)
+		if fresh && newer(rel.ComfyUI, r[6]) {
+			r[6], behind = ui.Yellow(r[6]), true
+		}
 	}
 	ui.Table(append([][]string{header}, rows...))
 	if len(warnings) > 0 {
 		ui.Printf("\n")
 		for _, w := range warnings {
 			ui.Printf("%s %s\n", ui.Yellow("warning:"), w) // on stdout so -w keeps it on screen
+		}
+	}
+	if fresh {
+		if notes := releaseNotes(rel, behind, version, cli); len(notes) > 0 {
+			ui.Printf("\n%s\n", strings.Join(notes, "\n"))
 		}
 	}
 }

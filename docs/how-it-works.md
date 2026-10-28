@@ -28,7 +28,7 @@ The server with a `sync:` section runs one `comfynkg-sync@<type>` unit per model
 
 ## New releases
 
-`apply` installs `comfynkg-releases@check.timer` on every server: soon after boot and then every 6 hours it asks GitHub (ComfyUI, comfynkg) and PyPI (comfy-cli) for their latest stable release and keeps the answer in `/var/lib/comfynkg/releases.json`. A source that doesn't answer keeps its last value. `comfynkg releases` shows it; nothing else ever waits on the network for it.
+`apply` installs `comfynkg-releases@check.timer` on every server: soon after boot and then every 6 hours it asks GitHub (ComfyUI, comfynkg) and PyPI (comfy-cli) for their latest stable release and keeps the answer in `/var/lib/comfynkg/releases.json`. A source that doesn't answer keeps its last value. `comfynkg releases` shows it; nothing else ever waits on the network for it. `status` reads it too: instances on an older ComfyUI get a yellow version, and the output ends with what's newer and how to get it, e.g. `ComfyUI 0.44.0 is out · run: comfynkg update core all`. A check older than 7 days is ignored.
 
 ## Health and status
 

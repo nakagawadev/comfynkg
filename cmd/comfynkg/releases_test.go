@@ -64,3 +64,20 @@ func TestFetchReleases(t *testing.T) {
 		t.Errorf("load = %+v, %v", back, err)
 	}
 }
+
+func TestReleaseNotes(t *testing.T) {
+	r := Releases{ComfyUI: "0.44.0", Comfynkg: "v0.4.0", ComfyCLI: "1.24.0"}
+	got := strings.Join(releaseNotes(r, true, "v0.3.1", "1.23.0"), "\n")
+	for _, want := range []string{
+		"ComfyUI 0.44.0 is out · run: comfynkg update core all",
+		"comfynkg v0.4.0 is out · run: comfynkg self-update",
+		"comfy-cli 1.24.0 is out · run: comfynkg update cli",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("missing %q in:\n%s", want, got)
+		}
+	}
+	if notes := releaseNotes(r, false, "v0.4.0", "1.24.0"); len(notes) != 0 {
+		t.Errorf("up to date, but: %v", notes)
+	}
+}

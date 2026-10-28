@@ -76,6 +76,17 @@ func TestApply(t *testing.T) {
 		}
 	}
 
+	// status ends with what is newer and the command to update it, read from the cached check
+	sh(t, `mkdir -p /var/lib/comfynkg && printf '{"checked":"%s","comfyui":"99.0.0","comfynkg":"v99.0.0","comfy_cli":"99.0.0"}' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > /var/lib/comfynkg/releases.json`)
+	contains(t, mustOK(t, "status"), "ComfyUI 99.0.0 is out · run: comfynkg update core all",
+		"comfynkg v99.0.0 is out · run: comfynkg self-update", "comfy-cli 99.0.0 is out · run: comfynkg update cli")
+	// a stale check says nothing
+	sh(t, `printf '{"checked":"2020-01-01T00:00:00Z","comfyui":"99.0.0"}' > /var/lib/comfynkg/releases.json`)
+	if strings.Contains(mustOK(t, "status"), "is out") {
+		t.Error("a stale release check was shown")
+	}
+	sh(t, "rm -f /var/lib/comfynkg/releases.json")
+
 	// apply again: nothing to do
 	out = mustOK(t, "apply")
 	contains(t, out, "(comfy_a) unit unchanged, enabled", "done: 0 restarted, 0 started, 2 unchanged")
