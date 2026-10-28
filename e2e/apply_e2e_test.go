@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-const phase1Config = `# test config
+const applyConfig = `# test config
 host: devbox
 root: /home/comfy/instances
 flags: --disable-metadata --cpu
@@ -31,14 +31,14 @@ comfy_b:   # the video one
   enabled: true
 `
 
-// Phase 1 story: apply creates and starts two instances, status shows them, disable one,
-// set a flag on the other, re-apply is a no-op, removing an instance removes its unit.
-func TestPhase1(t *testing.T) {
+// Apply story: apply creates and starts two instances, status shows them, disable one, set a flag on
+// the other, re-apply is a no-op, removing an instance removes its unit, a foreign unit is never touched.
+func TestApply(t *testing.T) {
 	cleanup(t)
 	t.Cleanup(func() { cleanup(t) })
 	newInstance(t, "comfy_a")
 	newInstance(t, "comfy_b")
-	writeConfig(t, phase1Config)
+	writeConfig(t, applyConfig)
 
 	// dry run changes nothing
 	out := mustOK(t, "apply", "--dry-run")
@@ -65,19 +65,6 @@ func TestPhase1(t *testing.T) {
 	contains(t, out, "devbox · comfynkg", "NAME", "comfy_a  image  yes", "running", "ok")
 	contains(t, mustOK(t, "run", "comfy_a", "--print"), "/home/comfy/instances/comfy_a/.venv/bin/python main.py --listen 127.0.0.1,")
 
-	// check: every custom node imports; a broken one is named with its reason; the instance keeps running
-	contains(t, mustOK(t, "check", "comfy_a"), "(comfy_a) custom nodes... ok")
-	broken := root + "/comfy_a/custom_nodes/nkg_broken.py"
-	sh(t, "runuser -u comfy -- sh -c 'echo import nkg_missing_module_xyz > "+broken+"'")
-	r := nkg(t, "check", "comfy_a")
-	if r.code != 1 || !strings.Contains(r.out, "1 failed to import") || !strings.Contains(r.out, "nkg_broken.py: No module named 'nkg_missing_module_xyz'") {
-		t.Errorf("check with a broken node: exit %d", r.code)
-	}
-	os.Remove(broken)
-	if a := active(t, "comfynkg-comfy_a"); a != "active" {
-		t.Fatalf("check touched the running instance: %s", a)
-	}
-
 	// apply again: nothing to do
 	out = mustOK(t, "apply")
 	contains(t, out, "(comfy_a) unit unchanged, enabled", "done: 0 restarted, 0 started, 2 unchanged")
@@ -102,7 +89,7 @@ func TestPhase1(t *testing.T) {
 
 	// invalid edits are refused and leave the file alone
 	before, _ := os.ReadFile(cfgPath)
-	r = nkg(t, "set", "comfy_a", "port", "8189")
+	r := nkg(t, "set", "comfy_a", "port", "8189")
 	if r.code != 2 || !strings.Contains(r.out, "already used by comfy_a") && !strings.Contains(r.out, "already used by") {
 		t.Fatalf("duplicate port: exit %d", r.code)
 	}
@@ -124,7 +111,7 @@ func TestPhase1(t *testing.T) {
 	contains(t, mustOK(t, "start", "comfy_a"), "(comfy_a) starting... ok")
 
 	// an instance removed from the file loses its unit
-	writeConfig(t, strings.Split(phase1Config, "comfy_b:")[0])
+	writeConfig(t, strings.Split(applyConfig, "comfy_b:")[0])
 	out = mustOK(t, "apply")
 	contains(t, out, "comfynkg-comfy_b.service removed (not in the file)")
 	if _, err := os.Stat("/etc/systemd/system/comfynkg-comfy_b.service"); err == nil {
@@ -133,7 +120,7 @@ func TestPhase1(t *testing.T) {
 
 	// a unit with the same name not made by comfynkg is never overwritten
 	os.WriteFile("/etc/systemd/system/comfynkg-comfy_b.service", []byte("[Service]\nExecStart=/bin/true\n"), 0o644)
-	writeConfig(t, phase1Config)
+	writeConfig(t, applyConfig)
 	r = nkg(t, "apply")
 	if r.code == 0 || !strings.Contains(r.out, "not managed by comfynkg") {
 		t.Fatalf("overwrote an unmanaged unit: exit %d", r.code)

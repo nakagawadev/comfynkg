@@ -23,14 +23,6 @@ comfy_a:
   enabled: false
 `
 
-func absent(t *testing.T, path string) {
-	t.Helper()
-	if _, err := os.Lstat(path); err == nil {
-		t.Errorf("%s was created", path)
-		os.Remove(path)
-	}
-}
-
 // Security story: the owner can't use the config, a symlink in its folders
 // or a crafted source instance to make root write or read files outside them.
 func TestSecurity(t *testing.T) {
@@ -93,6 +85,10 @@ func TestSecurity(t *testing.T) {
 	}
 	absent(t, "/etc/nkg-pwn-state")
 
+	if testing.Short() {
+		t.Log("-short: skipping 5 (a real create)")
+		return
+	}
 	// 5. create --nodes-from: a single-file node that is a symlink to a root-only file is not copied
 	writeConfig(t, secConfig)
 	sh(t, "runuser -u comfy -- ln -sf /etc/shadow /home/comfy/instances/comfy_a/custom_nodes/leak.py")

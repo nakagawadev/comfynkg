@@ -5,13 +5,70 @@ package e2e
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"strings"
 	"testing"
 	"time"
 )
 
-// A pre-comfy-cli install, like the ones on real servers: the venv lives outside the folder,
-// and ComfyUI-Manager is a clone in custom_nodes instead of the pip package.
+const createConfig = `host: devbox
+root: /home/comfy/instances
+flags: --disable-metadata --cpu
+models:
+  image: /home/comfy/config/image/extra_model_paths.yaml
+  video: /home/comfy/config/video/extra_model_paths.yaml
+
+comfy_a:
+  type: image
+  port: 8188
+  gpu: 0
+  enabled: true
+`
+
+// Create story: create installs ComfyUI with comfy-cli, copies the nodes (git + single-file),
+// checks they import and adds a disabled entry; refused names and ports; remove --purge.
+func TestCreate(t *testing.T) {
+	cleanup(t)
+	t.Cleanup(func() { cleanup(t); sh(t, "rm -rf /home/comfy/instances/comfy_c") })
+	newInstance(t, "comfy_a")
+	sh(t, fmt.Sprintf("install -o comfy -g comfy -m 644 testdata/sleep_node.py %s/comfy_a/custom_nodes/nkg_sleep.py", root))
+	sh(t, "rm -rf /home/comfy/instances/comfy_c")
+	writeConfig(t, createConfig)
+	mustOK(t, "apply")
+
+	// create: installs ComfyUI with comfy-cli, copies nodes (git + single-file), adds a disabled entry
+	os.Setenv("COMFYNKG_INSTALL_ARGS", "--cpu")
+	out := mustOK(t, "create", "comfy_c", "--type", "image", "--port", "8190", "--gpu", "1", "--nodes-from", "comfy_a")
+	contains(t, out, "(comfy_c) installing ComfyUI in /home/comfy/instances/comfy_c...", "(comfy_c) copying custom nodes from /home/comfy/instances/comfy_a...",
+		"(comfy_c) copied nkg_sleep.py", "(comfy_c) unit created", "(comfy_c) checking that every custom node imports...", "done: comfy_c created (disabled)")
+	contains(t, sh(t, "stat -c %U /home/comfy/instances/comfy_c /home/comfy/instances/comfy_c/.venv /home/comfy/instances/comfy_c/custom_nodes/nkg_sleep.py"), "comfy\ncomfy\ncomfy\n")
+	cfg, _ := os.ReadFile(cfgPath)
+	contains(t, string(cfg), "comfy_c:\n  type: image\n  port: 8190\n  gpu: 1\n  enabled: false")
+	if a := active(t, "comfynkg-comfy_c"); a != "inactive" {
+		t.Fatalf("created instance is %s", a)
+	}
+	if r := nkg(t, "create", "comfy_c", "--type", "image", "--port", "8191", "--gpu", "1"); r.code != 2 {
+		t.Fatalf("create over an existing instance: exit %d", r.code)
+	}
+	if r := nkg(t, "create", "comfy_d", "--type", "image", "--port", "8188", "--gpu", "1"); r.code != 2 || !strings.Contains(r.out, "already used by") {
+		t.Fatalf("create on a used port: exit %d", r.code)
+	}
+	contains(t, mustOK(t, "enable", "comfy_c"), "(comfy_c) enabled, starting... ok")
+
+	// remove --purge
+	out = mustOK(t, "remove", "comfy_c", "--purge")
+	contains(t, out, "(comfy_c) removed from /etc/comfynkg.yaml and systemd", "(comfy_c) deleted /home/comfy/instances/comfy_c")
+	if _, err := os.Stat("/home/comfy/instances/comfy_c"); err == nil {
+		t.Fatal("folder still there")
+	}
+	if cfg, _ := os.ReadFile(cfgPath); strings.Contains(string(cfg), "comfy_c") {
+		t.Fatal("entry still in the file")
+	}
+	if err := exec.Command("systemctl", "cat", "comfynkg-comfy_c").Run(); err == nil {
+		t.Fatal("unit still there")
+	}
+}
+
 const (
 	legacyDir  = "/home/comfy/legacy/comfy_old"
 	legacyVenv = "/home/comfy/.legacy-venvs/venv_old"
@@ -29,7 +86,10 @@ models:
 // Legacy story: create --nodes-from an install with the classic Manager snapshots it with
 // cm-cli.py and restores git and single-file nodes; a source no Manager can read fails before
 // anything is installed.
-func TestLegacyNodes(t *testing.T) {
+func TestCreateFromLegacy(t *testing.T) {
+	if testing.Short() {
+		t.Skip("-short: builds a classic install and fetches the whole registry")
+	}
 	cleanup(t)
 	t.Cleanup(func() {
 		cleanup(t)

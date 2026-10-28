@@ -1,0 +1,127 @@
+//go:build e2e
+
+package e2e
+
+import (
+	"fmt"
+	"os"
+	"regexp"
+	"strings"
+	"syscall"
+	"testing"
+	"time"
+)
+
+// Restart story: drain-aware restarts lose nothing, a timeout turns drain off and skips, --force
+// restarts anyway, instances without the plugin just wait, Ctrl-C undrains.
+func TestRestart(t *testing.T) {
+	cleanup(t)
+	t.Cleanup(func() { cleanup(t) })
+	pluginInstances(t)
+
+	out := mustOK(t, "apply")
+	contains(t, out, "> plugin config written: /home/comfy/config/image/comfyui_nakagawa.yaml", "> plugin config written: /home/comfy/config/video/comfyui_nakagawa.yaml")
+	pcfg := sh(t, "cat /home/comfy/config/image/comfyui_nakagawa.yaml; stat -c %U /home/comfy/config/image/comfyui_nakagawa.yaml")
+	contains(t, pcfg, "# managed by comfynkg", "drain: true", `"8188":`, "enabled: true", "comfy\n")
+	if !strings.Contains(mustOK(t, "apply"), "done: 0 restarted, 0 started, 2 unchanged") {
+		t.Error("second apply rewrote something")
+	}
+
+	// manual drain + status + loopback only
+	contains(t, mustOK(t, "drain", "on", "comfy_a"), "(comfy_a) drain on (0 running, 0 pending)")
+	if code := queueSleep(t, 8188, 0); code != 503 {
+		t.Fatalf("prompt while draining: HTTP %d", code)
+	}
+	st := mustOK(t, "drain", "status")
+	contains(t, st, "comfy_a  yes", "comfy_b  -", "(no plugin)")
+	contains(t, mustOK(t, "status"), "draining")
+	if code := strings.TrimSpace(sh(t, fmt.Sprintf("curl -s -o /dev/null -w '%%{http_code}' http://%s:8188/nkg/drain", vmIP(t)))); code != "404" {
+		t.Fatalf("drain from a non-loopback address: HTTP %s", code)
+	}
+	if code := strings.TrimSpace(sh(t, "curl -s -o /dev/null -w '%{http_code}' -H 'Host: evil.example' http://127.0.0.1:8188/nkg/drain")); code != "404" {
+		t.Fatalf("drain with a non-loopback Host (DNS rebinding): HTTP %s", code)
+	}
+	contains(t, mustOK(t, "drain", "off", "comfy_a"), "drain off")
+	if code := queueSleep(t, 8188, 0); code != 200 {
+		t.Fatalf("prompt after drain off: HTTP %d", code)
+	}
+	if r := nkg(t, "drain", "on", "comfy_b"); r.code != 1 || !strings.Contains(r.out, "no plugin") {
+		t.Fatalf("drain on without plugin: exit %d", r.code)
+	}
+
+	// restart --wait: three 3 s prompts finish before the restart; new prompts get 503 meanwhile
+	time.Sleep(time.Second)
+	for i := 0; i < 3; i++ {
+		queueSleep(t, 8188, 3)
+	}
+	_, wait := background(t, "restart", "comfy_a", "--wait")
+	time.Sleep(1500 * time.Millisecond)
+	if code := queueSleep(t, 8188, 0); code != 503 {
+		t.Errorf("prompt during restart --wait: HTTP %d", code)
+	}
+	r := wait()
+	if r.code != 0 {
+		t.Fatalf("restart --wait exit %d", r.code)
+	}
+	contains(t, r.out, "(comfy_a) draining... waiting:", "(comfy_a) draining... queue empty (", "restarting... ok", "done: 1 restarted")
+	events := sh(t, "cat /home/comfy/stats/8188/*/events.jsonl")
+	if n := strings.Count(events, `"status": "success"`); n < 3 {
+		t.Fatalf("only %d successful prompts recorded before the restart:\n%s", n, events)
+	}
+	if d := drainState(t, 8188); d["draining"] != false {
+		t.Fatalf("still draining after restart: %v", d)
+	}
+	// the new columns: comfy_a has stats, so OK/ERR counts since this start; UPTIME is short
+	if st := mustOK(t, "status", "comfy_a"); !regexp.MustCompile(`comfy_a .* 0/0 +\d+/0 +\d+ +\d+s +ok`).MatchString(st) {
+		t.Errorf("status columns:\n%s", st)
+	}
+
+	// timeout: drain off, skipped, exit 3
+	queueSleep(t, 8188, 8)
+	queueSleep(t, 8188, 8)
+	time.Sleep(500 * time.Millisecond)
+	r = nkg(t, "restart", "comfy_a", "comfy_b", "--wait", "--timeout", "3s")
+	if r.code != 3 {
+		t.Fatalf("timeout exit %d", r.code)
+	}
+	contains(t, r.out, "(comfy_a) draining... timeout after 3s (1 running, 1 pending), drain off, skipped",
+		"(comfy_b) no plugin, waiting for queue without drain... queue empty", "done: 1 restarted, 1 skipped (comfy_a)")
+	if d := drainState(t, 8188); d["draining"] != false {
+		t.Fatalf("timeout left drain on: %v", d)
+	}
+
+	// --force restarts anyway
+	r = nkg(t, "restart", "comfy_a", "--wait", "--timeout", "2s", "--force")
+	if r.code != 0 {
+		t.Fatalf("--force exit %d", r.code)
+	}
+	contains(t, r.out, "timeout after 2s", "restarting anyway, restarting... ok")
+
+	// Ctrl-C while waiting turns drain off
+	queueSleep(t, 8188, 20)
+	time.Sleep(500 * time.Millisecond)
+	cmd, wait := background(t, "restart", "comfy_a", "--wait")
+	time.Sleep(2 * time.Second)
+	cmd.Process.Signal(syscall.SIGINT)
+	r = wait()
+	if r.code == 0 || !strings.Contains(r.out, "interrupted, drain off") {
+		t.Fatalf("Ctrl-C: exit %d", r.code)
+	}
+	if d := drainState(t, 8188); d["draining"] != false {
+		t.Fatalf("Ctrl-C left drain on: %v", d)
+	}
+
+	// parallel restart of everything
+	r = nkg(t, "restart", "all", "--parallel")
+	if r.code != 0 {
+		t.Fatalf("parallel exit %d", r.code)
+	}
+	contains(t, r.out, "(comfy_a) restarting... ok", "(comfy_b) restarting... ok", "done: 2 restarted")
+
+	// a hand-written plugin file is never overwritten
+	os.WriteFile("/home/comfy/config/video/comfyui_nakagawa.yaml", []byte("stats: {enabled: true}\n"), 0o644)
+	if r := nkg(t, "apply"); r.code == 0 || !strings.Contains(r.out, "not managed by comfynkg") {
+		t.Fatalf("overwrote a hand-written plugin file: exit %d", r.code)
+	}
+	os.Remove("/home/comfy/config/video/comfyui_nakagawa.yaml")
+}

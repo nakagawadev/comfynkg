@@ -3,7 +3,7 @@ LDFLAGS := -s -w -X main.version=$(VERSION)
 VM      := comfynkg-dev
 VMARCH  := $(shell orb -m $(VM) uname -m 2>/dev/null | sed 's/aarch64/arm64/;s/x86_64/amd64/')
 
-.PHONY: build test lint dev-vm dev-node vm-install e2e
+.PHONY: build test lint dev-vm dev-node vm-install e2e e2e-quick
 
 build: ## release binaries for linux amd64 and arm64 + checksums
 	for arch in amd64 arm64; do \
@@ -29,7 +29,10 @@ vm-install: ## build for the VM and install it as /usr/local/bin/comfynkg
 
 e2e: vm-install ## run the e2e tests inside the VM as root
 	CGO_ENABLED=0 GOOS=linux GOARCH=$(VMARCH) go test -c -tags e2e -o dist/e2e.test ./e2e
-	orb -m $(VM) -u root bash -c 'cd $(CURDIR)/e2e && $(CURDIR)/dist/e2e.test -test.v -test.timeout 60m $(if $(RUN),-test.run $(RUN))'
+	orb -m $(VM) -u root bash -c 'cd $(CURDIR)/e2e && $(CURDIR)/dist/e2e.test -test.v -test.timeout 60m $(if $(SHORT),-test.short) $(if $(RUN),-test.run $(RUN))'
+
+e2e-quick: ## e2e without the slow parts that only exercise installs and the network (-short)
+	$(MAKE) e2e RUN="$(RUN)" SHORT=1
 
 dev-node: ## create the sync worker VM, trust the dev VM's key, name it node0 in the dev VM
 	orb list | grep -q '^comfynkg-node ' || orb create ubuntu:24.04 comfynkg-node

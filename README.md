@@ -118,7 +118,8 @@ Full list, flags, output and exit codes: [docs/commands.md](docs/commands.md).
 ```bash
 make lint test   # gofmt, go vet, staticcheck, unit tests
 make build       # dist/comfynkg-linux-{amd64,arm64} + SHA256SUMS
-make dev-vm e2e  # end-to-end tests as root in an OrbStack VM
+make dev-vm e2e  # end-to-end tests as root in an OrbStack VM (RUN=TestRename for one)
+make e2e-quick   # the same without the slow install/network parts, while working
 ```
 
 
