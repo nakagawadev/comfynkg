@@ -5,6 +5,7 @@ package e2e
 import (
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -64,6 +65,16 @@ func TestApply(t *testing.T) {
 	out = mustOK(t, "status")
 	contains(t, out, "devbox · comfynkg", "NAME", "comfy_a  image  yes", "running", "ok")
 	contains(t, mustOK(t, "run", "comfy_a", "--print"), "/home/comfy/instances/comfy_a/.venv/bin/python main.py --listen 127.0.0.1,")
+
+	// apply installs the release check: a timer every 6 hours running `releases --fetch`
+	contains(t, sh(t, "systemctl is-enabled comfynkg-releases@check.timer; systemctl show -p ExecStart --value comfynkg-releases@check.service"), "enabled", "comfynkg releases --fetch")
+	if !testing.Short() {
+		mustOK(t, "releases", "--fetch") // asks GitHub and PyPI
+		out := mustOK(t, "releases")
+		if !regexp.MustCompile(`ComfyUI\s+\d+\.\d+\.\d+`).MatchString(out) || !regexp.MustCompile(`comfynkg\s+v\d+\.\d+\.\d+`).MatchString(out) || !strings.Contains(out, "checked ") {
+			t.Errorf("releases without versions:\n%s", out)
+		}
+	}
 
 	// apply again: nothing to do
 	out = mustOK(t, "apply")

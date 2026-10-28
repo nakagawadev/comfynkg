@@ -116,7 +116,8 @@ func active(t *testing.T, unit string) string {
 
 // cleanup stops every comfynkg unit and removes them, so each test starts clean.
 func cleanup(t *testing.T) {
-	sh(t, `for u in $(ls /etc/systemd/system/comfynkg-*.service 2>/dev/null); do n=$(basename $u); systemctl disable --now $n >/dev/null 2>&1; rm -f $u; done; systemctl daemon-reload; rm -f /etc/comfynkg.yaml`)
+	sh(t, `systemctl disable --now comfynkg-releases@check.timer >/dev/null 2>&1; rm -f /etc/systemd/system/comfynkg-releases@check.timer
+for u in $(ls /etc/systemd/system/comfynkg-*.service 2>/dev/null); do n=$(basename $u); systemctl disable --now $n >/dev/null 2>&1; rm -f $u; done; systemctl daemon-reload; rm -f /etc/comfynkg.yaml`)
 }
 
 func vmIP(t *testing.T) string { return strings.TrimSpace(sh(t, "tailscale ip -4")) }

@@ -244,3 +244,38 @@ RestartSec=30
 WantedBy=multi-user.target
 `, Marker, typ, owner, Binary, typ, typ, typ), nil
 }
+
+// Units that check for new releases every 6 hours. The @ keeps them out of Managed (instance units).
+const (
+	ReleasesService = "comfynkg-releases@check.service"
+	ReleasesTimer   = "comfynkg-releases@check.timer"
+)
+
+// RenderReleases returns the oneshot service that runs `comfynkg releases --fetch` and its timer:
+// once soon after boot (or right away when first enabled), then every 6 hours.
+func RenderReleases() (service, timer string) {
+	service = fmt.Sprintf(`%s
+[Unit]
+Description=comfynkg: check for new ComfyUI, comfynkg and comfy-cli releases
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=%s releases --fetch
+StateDirectory=comfynkg
+`, Marker, Binary)
+	timer = fmt.Sprintf(`%s
+[Unit]
+Description=comfynkg: check for new releases every 6 hours
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=6h
+RandomizedDelaySec=15min
+
+[Install]
+WantedBy=timers.target
+`, Marker)
+	return service, timer
+}

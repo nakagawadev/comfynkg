@@ -59,6 +59,7 @@ var commands = map[string]command{
 	"create":      {cmdCreate, true},
 	"remove":      {cmdRemove, true},
 	"rename":      {cmdRename, true},
+	"releases":    {cmdReleases, false}, // --fetch checks root itself
 	"node":        {cmdNode, true},
 	"update":      {cmdUpdate, true},
 	"snapshot":    {cmdSnapshot, true},

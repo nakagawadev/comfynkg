@@ -26,6 +26,10 @@ To move an existing ComfyUI under comfynkg: `create` a new instance (copying its
 
 The server with a `sync:` section runs one `comfynkg-sync@<type>` unit per model type. Every 60 seconds it compares the source folder with each destination (`rsync` over SSH, through Tailscale) and copies what changed. Files still being written are left for the next round, and files appear on the destination only when complete. Before anything that deletes, the source must exist, be the expected filesystem and contain files, so an unmounted disk never wipes the workers. `sync status` shows the last round per destination.
 
+## New releases
+
+`apply` installs `comfynkg-releases@check.timer` on every server: soon after boot and then every 6 hours it asks GitHub (ComfyUI, comfynkg) and PyPI (comfy-cli) for their latest stable release and keeps the answer in `/var/lib/comfynkg/releases.json`. A source that doesn't answer keeps its last value. `comfynkg releases` shows it; nothing else ever waits on the network for it.
+
 ## Health and status
 
 comfynkg talks to every instance on `127.0.0.1`: `/system_stats` for health and version, `/queue` for the queue, and the node's `/nkg/metrics` (RSS, prompts ok/error) and `/nkg/drain` when it is installed. systemd gives the state, restarts and uptime; `nvidia-smi` gives each instance's VRAM (by process), the GPU model, and the driver and CUDA version in the header.

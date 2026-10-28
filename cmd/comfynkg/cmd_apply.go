@@ -161,6 +161,9 @@ func apply(c *config.Config, restart map[string]bool) error {
 	if err := applySync(c); err != nil {
 		return err
 	}
+	if err := applyReleases(); err != nil {
+		return err
+	}
 	if g.dryRun {
 		ui.Printf("nothing changed (dry run)\n")
 		return nil
