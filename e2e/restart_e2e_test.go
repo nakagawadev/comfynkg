@@ -18,6 +18,8 @@ func TestRestart(t *testing.T) {
 	cleanup(t)
 	t.Cleanup(func() { cleanup(t) })
 	pluginInstances(t)
+	// a custom node that doesn't import: status flags it from the plugin's metrics
+	sh(t, "runuser -u comfy -- sh -c 'echo import nkg_missing_module_xyz > "+root+"/comfy_a/custom_nodes/nkg_broken.py'")
 
 	out := mustOK(t, "apply")
 	contains(t, out, "> plugin config written: /home/comfy/config/image/comfyui_nakagawa.yaml", "> plugin config written: /home/comfy/config/video/comfyui_nakagawa.yaml")
@@ -34,7 +36,7 @@ func TestRestart(t *testing.T) {
 	}
 	st := mustOK(t, "drain", "status")
 	contains(t, st, "comfy_a  yes", "comfy_b  -", "(no plugin)")
-	contains(t, mustOK(t, "status"), "draining")
+	contains(t, mustOK(t, "status"), "draining", "1 node failed", "comfy_a: nkg_broken failed to import · run: comfynkg check comfy_a")
 	if code := strings.TrimSpace(sh(t, fmt.Sprintf("curl -s -o /dev/null -w '%%{http_code}' http://%s:8188/nkg/drain", vmIP(t)))); code != "404" {
 		t.Fatalf("drain from a non-loopback address: HTTP %s", code)
 	}

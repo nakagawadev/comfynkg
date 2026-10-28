@@ -8,7 +8,7 @@ Global flags: `--config <path>`, `--dry-run` (show what would change, change not
 
 | Command | Does |
 |---|---|
-| `status [inst...] [-w] [--local]` | Versions (comfynkg, comfy-cli, uv, NVIDIA driver, CUDA), then per instance: state, port, GPU, ComfyUI version, RSS, VRAM, queue, prompts ok/error and uptime since the last start, restarts, health; also the servers in `hosts:` (over ssh) unless `--local`; `-w` refreshes every 2 s |
+| `status [inst...] [-w] [--local]` | Versions (comfynkg, comfy-cli, uv, NVIDIA driver, CUDA), then per instance: state, port, GPU, ComfyUI version, RSS, VRAM, queue, prompts ok/error and uptime since the last start, restarts, health (with the plugin 0.1.1+, custom nodes that failed to import are flagged and named at the end); also the servers in `hosts:` (over ssh) unless `--local`; `-w` refreshes every 2 s |
 | `apply` | Make systemd match the file |
 | `start\|stop <inst\|all>` | Start or stop the unit |
 | `enable\|disable <inst>` | Set `enabled` in the file and apply |

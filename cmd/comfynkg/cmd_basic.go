@@ -142,12 +142,13 @@ func printStatus(c *config.Config, targets []*config.Instance, warnings []string
 
 	vram, names := gpuMemory(), gpuNames()
 	rows := make([][]string, len(targets))
+	failed := make([][]string, len(targets))
 	var wg sync.WaitGroup
 	for i, in := range targets {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			rows[i] = statusRow(in, vram)
+			rows[i], failed[i] = statusRow(in, vram)
 			if n := names[*in.GPU]; n != "" {
 				rows[i][5] += " " + n
 			}
@@ -170,10 +171,18 @@ func printStatus(c *config.Config, targets []*config.Instance, warnings []string
 			ui.Printf("%s %s\n", ui.Yellow("warning:"), w) // on stdout so -w keeps it on screen
 		}
 	}
-	if fresh {
-		if notes := releaseNotes(rel, behind, version, cli); len(notes) > 0 {
-			ui.Printf("\n%s\n", strings.Join(notes, "\n"))
+	var notes []string
+	for i, f := range failed {
+		if len(f) > 0 {
+			name := targets[i].Name
+			notes = append(notes, fmt.Sprintf("%s: %s failed to import · run: comfynkg check %s", name, strings.Join(f, ", "), name))
 		}
+	}
+	if fresh {
+		notes = append(notes, releaseNotes(rel, behind, version, cli)...)
+	}
+	if len(notes) > 0 {
+		ui.Printf("\n%s\n", strings.Join(notes, "\n"))
 	}
 }
 
@@ -245,15 +254,15 @@ func lastLine(s string) string {
 // startGrace is how long an instance that doesn't answer yet is "starting" rather than "down".
 const startGrace = 2 * time.Minute
 
-// statusRow builds one line of the table. vram is per-PID usage from nvidia-smi; without it
-// (no NVIDIA GPU) VRAM falls back to what PyTorch has reserved, from the plugin.
-func statusRow(in *config.Instance, vram map[int]float64) []string {
+// statusRow builds one line of the table and lists the custom nodes that failed to import. vram is
+// per-PID usage from nvidia-smi; without it (no NVIDIA GPU) VRAM falls back to what PyTorch has reserved, from the plugin.
+func statusRow(in *config.Instance, vram map[int]float64) (row []string, failed []string) {
 	ctx := context.Background()
 	yes := map[bool]string{true: "yes", false: "no"}
-	row := []string{in.Name, in.Type, yes[in.Enabled], "no unit", strconv.Itoa(in.Port), strconv.Itoa(*in.GPU), "-", "-", "-", "-", "-", "-", "-", "-"}
+	row = []string{in.Name, in.Type, yes[in.Enabled], "no unit", strconv.Itoa(in.Port), strconv.Itoa(*in.GPU), "-", "-", "-", "-", "-", "-", "-", "-"}
 	st, err := systemd.StateOf(unitOf(in))
 	if err != nil || !st.Exists {
-		return row
+		return row, nil
 	}
 	row[3] = map[string]string{"active": "running", "inactive": "stopped", "activating": "starting", "deactivating": "stopping"}[st.Active]
 	if row[3] == "" {
@@ -264,7 +273,7 @@ func statusRow(in *config.Instance, vram map[int]float64) []string {
 		if st.Active == "failed" {
 			row[13] = ui.Red("down")
 		}
-		return row
+		return row, nil
 	}
 	if st.Uptime > 0 {
 		row[12] = shortDuration(st.Uptime)
@@ -281,7 +290,7 @@ func statusRow(in *config.Instance, vram map[int]float64) []string {
 		} else {
 			row[13] = ui.Red("down")
 		}
-		return row
+		return row, nil
 	}
 	row[6], row[13] = stats.Version, ui.Green("ok")
 	if q, err := cl.Queue(ctx); err == nil {
@@ -292,11 +301,15 @@ func statusRow(in *config.Instance, vram map[int]float64) []string {
 		if vram == nil { // no nvidia-smi: what PyTorch has reserved is the best there is
 			row[8] = ui.Bytes(m.VRAM)
 		}
+		if n := len(m.Failed); n > 0 {
+			row[13] += "  " + ui.Yellow(fmt.Sprintf("%d %s failed", n, map[bool]string{true: "node", false: "nodes"}[n == 1]))
+			failed = m.Failed
+		}
 	}
 	if d, err := cl.DrainStatus(ctx); err == nil && d.Draining {
 		row[13] += "  " + ui.Yellow("draining")
 	}
-	return row
+	return row, failed
 }
 
 // paintRow colors a status row: the name cyan, yes/running green, empty values dim (health is colored when set).
