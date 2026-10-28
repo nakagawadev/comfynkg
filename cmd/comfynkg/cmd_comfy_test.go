@@ -130,3 +130,13 @@ func TestChangesTorch(t *testing.T) {
 		}
 	}
 }
+
+func TestModelCategories(t *testing.T) {
+	got := modelCategories("sams/sam_vit_h_4b8939.pth\nsams/sam_vit_b_01ec64.pth\nultralytics/bbox/face_yolov8m.pt\nloose.ckpt\n")
+	if !reflect.DeepEqual(got, []string{"sams (2)", "ultralytics/bbox (1)"}) {
+		t.Errorf("modelCategories = %v", got)
+	}
+	if got := modelCategories(""); len(got) != 0 {
+		t.Errorf("empty listing: %v", got)
+	}
+}

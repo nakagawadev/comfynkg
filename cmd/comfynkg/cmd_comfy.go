@@ -129,6 +129,7 @@ func cmdCreate(args []string) error {
 			return fmt.Errorf("%s: copy nodes from %s: %w", name, src, err)
 		}
 		defer cleanup()
+		warnSourceModels(next, in, src)
 	}
 
 	w := workspace(next, in)
@@ -170,6 +171,49 @@ func cmdCreate(args []string) error {
 	}
 	ui.Printf("done: %s created (disabled); start it with: comfynkg enable %s\n", name, name)
 	return nil
+}
+
+// warnSourceModels lists model files the source keeps in its own models/ folder: the new instance
+// only sees the shared paths of the models file, so nodes that load from models/<category> (SAM,
+// ultralytics detectors) would miss them. Read as the source's owner; a listing error is ignored.
+func warnSourceModels(c *config.Config, in *config.Instance, src string) {
+	fi, err := os.Stat(src)
+	if err != nil {
+		return
+	}
+	o, err := config.OwnerOf(fi)
+	if err != nil {
+		return
+	}
+	out, _ := run.Output(run.Command(&run.User{Name: o.Name, Home: o.Home}, "find", filepath.Join(src, "models"), "-type", "f", "-size", "+1M",
+		"(", "-name", "*.safetensors", "-o", "-name", "*.pth", "-o", "-name", "*.pt", "-o", "-name", "*.ckpt", "-o", "-name", "*.bin", "-o", "-name", "*.onnx", "-o", "-name", "*.gguf", ")",
+		"-printf", "%P\n"))
+	cats := modelCategories(out)
+	if len(cats) == 0 {
+		return
+	}
+	p := prefix(c, in)
+	ui.Line(p, "%s the source keeps models in its own models/ folder, which the new instance won't see:", ui.Yellow("warning:"))
+	for _, cat := range cats {
+		ui.Printf("    %s\n", cat)
+	}
+	ui.Printf("    copy the ones you need to a shared models folder and declare the category in %s\n", c.Models[in.Type])
+}
+
+// modelCategories groups "sams/a.pth\nultralytics/bbox/b.pt" into "sams (1)", "ultralytics/bbox (1)".
+func modelCategories(list string) []string {
+	n := map[string]int{}
+	for _, l := range strings.Split(strings.TrimSpace(list), "\n") {
+		if dir := filepath.Dir(l); l != "" && dir != "." {
+			n[dir]++
+		}
+	}
+	var out []string
+	for d, k := range n {
+		out = append(out, fmt.Sprintf("%s (%d)", d, k))
+	}
+	sort.Strings(out)
+	return out
 }
 
 // installNodeRequirements installs every custom node's requirements.txt in the new venv: a restored

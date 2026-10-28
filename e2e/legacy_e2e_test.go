@@ -47,9 +47,12 @@ echo "NODE_CLASS_MAPPINGS = {}" > %[2]s/custom_nodes/legacy_file.py'`, base, leg
 	writeConfig(t, legacyConfig)
 	t.Setenv("COMFYNKG_INSTALL_ARGS", "--cpu")
 
+	// a model kept in the source's own models/ folder: create warns that the new instance won't see it
+	sh(t, "runuser -u comfy -- sh -c 'mkdir -p "+legacyDir+"/models/sams && head -c 2097152 /dev/zero > "+legacyDir+"/models/sams/sam_fake.pth'")
 	out := mustOK(t, "create", "comfy_l", "--type", "image", "--port", "8196", "--gpu", "0", "--nodes-from", legacyDir, "--nodes-venv", legacyVenv)
 	contains(t, out, "snapshot saved with the classic ComfyUI-Manager (custom_nodes/ComfyUI-Manager)",
-		"(comfy_l) copied legacy_file.py", "(comfy_l) checking that every custom node imports...", "done: comfy_l created (disabled)")
+		"(comfy_l) copied legacy_file.py", "(comfy_l) checking that every custom node imports...",
+		"the source keeps models in its own models/ folder", "    sams (1)", "done: comfy_l created (disabled)")
 	if strings.Index(out, "snapshot saved") > strings.Index(out, "installing ComfyUI") {
 		t.Error("snapshot taken after the install")
 	}
