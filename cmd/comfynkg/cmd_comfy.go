@@ -147,14 +147,67 @@ func cmdCreate(args []string) error {
 			return fmt.Errorf("%s: copy nodes: %w (remove %s before retrying)", name, err, dir)
 		}
 	}
+	if snap != "" {
+		installNodeRequirements(next, in)
+	}
 	if err := config.WriteFile(g.config, data); err != nil {
 		return err
 	}
 	if err := apply(next, nil); err != nil {
 		return err
 	}
+	// a node can be on disk and still not load (a dependency its requirements didn't bring in)
+	ui.Line(p, "checking that every custom node imports...")
+	failures, err := importCheck(next, in)
+	if err != nil {
+		return fmt.Errorf("%s created (disabled), but the import check failed: %w", name, err)
+	}
+	if len(failures) > 0 {
+		for _, f := range failures {
+			ui.Printf("    %s: %s\n", ui.Cyan(f.Node), f.Reason)
+		}
+		return fmt.Errorf("%s created (disabled), but %d custom nodes don't import; fix them and run: comfynkg check %s", name, len(failures), name)
+	}
 	ui.Printf("done: %s created (disabled); start it with: comfynkg enable %s\n", name, name)
 	return nil
+}
+
+// installNodeRequirements installs every custom node's requirements.txt in the new venv: a restored
+// snapshot brings the nodes back but not always their Python dependencies. A file that would change
+// torch is skipped with a warning, so a node can't swap the PyTorch build ComfyUI was installed with.
+func installNodeRequirements(c *config.Config, in *config.Instance) {
+	p := prefix(c, in)
+	reqs, _ := filepath.Glob(filepath.Join(c.Dir(in), "custom_nodes", "*", "requirements.txt"))
+	for _, req := range reqs {
+		node := filepath.Base(filepath.Dir(req))
+		plan, err := asOwner(c, "uv", "pip", "install", "--dry-run", "--python", c.Python(in), "-r", req)
+		if err != nil {
+			ui.Line(p, "%s requirements: %s", node, failed(err))
+			continue
+		}
+		if changesTorch(plan) {
+			ui.Line(p, "%s requirements: %s (would change torch; install them by hand if the node needs them)", node, ui.Yellow("skipped"))
+			continue
+		}
+		if _, err := asOwner(c, "uv", "pip", "install", "--python", c.Python(in), "-r", req); err != nil {
+			ui.Line(p, "%s requirements: %s", node, failed(err))
+		}
+	}
+}
+
+// changesTorch reads `uv pip install --dry-run` output: " + torch==", " - torchvision==", " ~ torchaudio".
+func changesTorch(plan string) bool {
+	for _, l := range strings.Split(plan, "\n") {
+		f := strings.Fields(l)
+		if len(f) < 2 || (f[0] != "+" && f[0] != "-" && f[0] != "~") {
+			continue
+		}
+		switch name, _, _ := strings.Cut(f[1], "=="); name {
+		case "torch", "torchvision", "torchaudio":
+			return true
+		}
+	}
+	return false
 }
 
 // legacyManagerDirs are the usual folder names of a classic ComfyUI-Manager clone.

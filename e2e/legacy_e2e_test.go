@@ -49,7 +49,7 @@ echo "NODE_CLASS_MAPPINGS = {}" > %[2]s/custom_nodes/legacy_file.py'`, base, leg
 
 	out := mustOK(t, "create", "comfy_l", "--type", "image", "--port", "8196", "--gpu", "0", "--nodes-from", legacyDir, "--nodes-venv", legacyVenv)
 	contains(t, out, "snapshot saved with the classic ComfyUI-Manager (custom_nodes/ComfyUI-Manager)",
-		"(comfy_l) copied legacy_file.py", "done: comfy_l created (disabled)")
+		"(comfy_l) copied legacy_file.py", "(comfy_l) checking that every custom node imports...", "done: comfy_l created (disabled)")
 	if strings.Index(out, "snapshot saved") > strings.Index(out, "installing ComfyUI") {
 		t.Error("snapshot taken after the install")
 	}

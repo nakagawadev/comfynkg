@@ -69,7 +69,7 @@ func TestPhase3(t *testing.T) {
 	os.Setenv("COMFYNKG_INSTALL_ARGS", "--cpu")
 	out := mustOK(t, "create", "comfy_c", "--type", "image", "--port", "8190", "--gpu", "1", "--nodes-from", "comfy_a")
 	contains(t, out, "(comfy_c) installing ComfyUI in /home/comfy/instances/comfy_c...", "(comfy_c) copying custom nodes from /home/comfy/instances/comfy_a...",
-		"(comfy_c) copied nkg_sleep.py", "(comfy_c) unit created", "done: comfy_c created (disabled)")
+		"(comfy_c) copied nkg_sleep.py", "(comfy_c) unit created", "(comfy_c) checking that every custom node imports...", "done: comfy_c created (disabled)")
 	contains(t, sh(t, "stat -c %U /home/comfy/instances/comfy_c /home/comfy/instances/comfy_c/.venv /home/comfy/instances/comfy_c/custom_nodes/nkg_sleep.py"), "comfy\ncomfy\ncomfy\n")
 	cfg, _ := os.ReadFile(cfgPath)
 	contains(t, string(cfg), "comfy_c:\n  type: image\n  port: 8190\n  gpu: 1\n  enabled: false")

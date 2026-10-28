@@ -118,3 +118,15 @@ ModuleNotFoundError: No module named 'cv2'
 		t.Errorf("no failures expected: %v", got)
 	}
 }
+
+func TestChangesTorch(t *testing.T) {
+	safe := "Would install 3 packages\n + opencv-python-headless==5.0.0.93\n + segment-anything==1.0\n + torchmetrics-extra-is-not-torch==1\n"
+	if changesTorch(safe) {
+		t.Error("flagged a plan that doesn't touch torch")
+	}
+	for _, plan := range []string{" - torch==2.14.1\n + torch==2.4.0\n", " + torchvision==0.19\n", " ~ torchaudio==2.4\n"} {
+		if !changesTorch(plan) {
+			t.Errorf("missed %q", plan)
+		}
+	}
+}
