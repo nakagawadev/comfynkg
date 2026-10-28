@@ -1,9 +1,11 @@
 package sync
 
 import (
+	"bufio"
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 )
@@ -65,5 +67,29 @@ func TestIsLocal(t *testing.T) {
 	}
 	if _, err := IsLocal("/no/host"); err == nil {
 		t.Error("a local path must be refused")
+	}
+}
+
+func TestParseProgress(t *testing.T) {
+	n, speed, ok := parseProgress("      1,048,576  40%    9.17MB/s    0:00:01 (xfr#1, to-chk=1/2)")
+	if !ok || n != 1048576 || speed != "9.17MB/s" {
+		t.Errorf("parseProgress = %d %q %v", n, speed, ok)
+	}
+	for _, l := range []string{"", "sending incremental file list", "Number of files: 3 (reg: 2, dir: 1)", "checkpoints/a.safetensors"} {
+		if _, _, ok := parseProgress(l); ok {
+			t.Errorf("parseProgress(%q) matched", l)
+		}
+	}
+}
+
+func TestSplitLines(t *testing.T) {
+	sc := bufio.NewScanner(strings.NewReader("  10  1%  1MB/s\r  20  2%  2MB/s\rdone\nlast"))
+	sc.Split(splitLines)
+	var got []string
+	for sc.Scan() {
+		got = append(got, sc.Text())
+	}
+	if strings.Join(got, "|") != "  10  1%  1MB/s|  20  2%  2MB/s|done|last" {
+		t.Errorf("lines = %q", got)
 	}
 }

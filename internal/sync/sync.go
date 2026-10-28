@@ -2,6 +2,8 @@
 package sync
 
 import (
+	"bufio"
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -35,6 +37,10 @@ type Dest struct {
 	Files     int       `json:"files"`
 	Bytes     int64     `json:"bytes"`
 	Error     string    `json:"error"`
+	// While syncing: bytes the plan will copy, copied so far and rsync's current speed.
+	Planned int64  `json:"planned,omitempty"`
+	Copied  int64  `json:"copied,omitempty"`
+	Speed   string `json:"speed,omitempty"`
 }
 
 type State struct {
@@ -188,6 +194,7 @@ func Round(typ, source string, dests []string, owner *run.User, uid, gid int, lo
 		d.LastStart, d.Error = time.Now(), ""
 		set := func(state, msg string) {
 			d.State, d.LastEnd = state, time.Now()
+			d.Planned, d.Copied, d.Speed = 0, 0, ""
 			if state == "error" {
 				d.Error = msg
 			}
@@ -209,17 +216,27 @@ func Round(typ, source string, dests []string, owner *run.User, uid, gid int, lo
 				set("waiting", fmt.Sprintf("(%d files still changing)", len(busy)))
 				break
 			}
-			d.State, d.Files = "syncing", 0
+			d.State, d.Files, d.Planned = "syncing", 0, 0
 			for _, c := range changes {
 				if !c.Delete {
 					d.Files++
+					d.Planned += c.Size
 				}
 			}
-			s.Dests = append(s.Dests, d)
-			_ = saveState(withDests(s, prev, dests), owner, uid, gid)
-			s.Dests = s.Dests[:len(s.Dests)-1]
-			start := time.Now()
-			out, err := run.Output(run.Command(owner, "rsync", rsyncArgs("--stats", slash(source), dest)...))
+			saveMid := func() {
+				s.Dests = append(s.Dests, d)
+				_ = saveState(withDests(s, prev, dests), owner, uid, gid)
+				s.Dests = s.Dests[:len(s.Dests)-1]
+			}
+			saveMid()
+			start, saved := time.Now(), time.Now()
+			out, err := transfer(owner, source, dest, func(copied int64, speed string) {
+				d.Copied, d.Speed = copied, speed
+				if time.Since(saved) >= ProgressEvery {
+					saveMid()
+					saved = time.Now()
+				}
+			})
 			if err != nil {
 				set("error", firstLine(err.Error()))
 				break
@@ -232,6 +249,66 @@ func Round(typ, source string, dests []string, owner *run.User, uid, gid int, lo
 	}
 	_ = saveState(s, owner, uid, gid)
 	return s
+}
+
+// ProgressEvery is how often a running transfer writes its progress to the state file.
+var ProgressEvery = 5 * time.Second
+
+// transfer runs the real rsync with --stats and --info=progress2, calling progress with the bytes
+// copied so far and rsync's speed as they come (progress lines end in \r). It returns the whole
+// output, for parseStats.
+func transfer(owner *run.User, source, dest string, progress func(int64, string)) (string, error) {
+	cmd := run.Command(owner, "rsync", rsyncArgs("--stats", "--info=progress2", slash(source), dest)...)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	pipe, err := cmd.StdoutPipe()
+	if err != nil {
+		return "", err
+	}
+	if err := cmd.Start(); err != nil {
+		return "", err
+	}
+	var all strings.Builder
+	sc := bufio.NewScanner(pipe)
+	sc.Split(splitLines)
+	for sc.Scan() {
+		line := sc.Text()
+		all.WriteString(line + "\n")
+		if n, speed, ok := parseProgress(line); ok {
+			progress(n, speed)
+		}
+	}
+	if err := cmd.Wait(); err != nil {
+		if msg := strings.TrimSpace(stderr.String()); msg != "" {
+			return all.String(), fmt.Errorf("rsync: %w: %s", err, msg)
+		}
+		return all.String(), fmt.Errorf("rsync: %w", err)
+	}
+	return all.String(), nil
+}
+
+// splitLines is bufio.ScanLines that also ends a line at \r, the way rsync redraws its progress.
+func splitLines(data []byte, atEOF bool) (int, []byte, error) {
+	if i := bytes.IndexAny(data, "\r\n"); i >= 0 {
+		return i + 1, data[:i], nil
+	}
+	if atEOF && len(data) > 0 {
+		return len(data), data, nil
+	}
+	return 0, nil, nil
+}
+
+// parseProgress reads an --info=progress2 line: "  1,048,576  40%    9.17MB/s    0:00:01 (xfr#1, to-chk=1/2)".
+func parseProgress(line string) (copied int64, speed string, ok bool) {
+	f := strings.Fields(line)
+	if len(f) < 3 || !strings.HasSuffix(f[1], "%") || !strings.HasSuffix(f[2], "/s") {
+		return 0, "", false
+	}
+	n, err := strconv.ParseInt(strings.ReplaceAll(f[0], ",", ""), 10, 64)
+	if err != nil {
+		return 0, "", false
+	}
+	return n, f[2], true
 }
 
 // withDests keeps previous entries for destinations not processed yet, for a consistent status mid-round.

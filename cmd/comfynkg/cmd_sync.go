@@ -152,6 +152,11 @@ func syncStatus(types []string) error {
 			}
 			if d.State == "syncing" {
 				files = fmt.Sprintf("%d planned", d.Files)
+				took = time.Since(d.LastStart).Round(time.Second).String() // this round so far
+				size = fmt.Sprintf("%s / %s", ui.Bytes(float64(d.Copied)), ui.Bytes(float64(d.Planned)))
+				if d.Speed != "" {
+					size += " · " + d.Speed
+				}
 			}
 			errMsg := d.Error
 			if errMsg == "" {
