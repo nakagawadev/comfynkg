@@ -100,3 +100,21 @@ func TestShortGPU(t *testing.T) {
 		}
 	}
 }
+
+func TestParseImportFailures(t *testing.T) {
+	log := `[WARNING] Traceback (most recent call last):
+ModuleNotFoundError: No module named 'cv2'
+[WARNING] Cannot import /home/comfy/instances/comfy_10/custom_nodes/comfyui-impact-pack module for custom nodes: No module named 'cv2'
+[INFO]    0.0 seconds (IMPORT FAILED): /home/comfy/instances/comfy_10/custom_nodes/comfyui-impact-pack
+[INFO]    0.0 seconds (IMPORT FAILED): /home/comfy/instances/comfy_10/custom_nodes/comfyui-base64-to-image
+[INFO]    0.1 seconds: /home/comfy/instances/comfy_10/custom_nodes/comfyui_nakagawa
+`
+	got := parseImportFailures(log)
+	want := []nodeFailure{{"comfyui-base64-to-image", "see the instance's log"}, {"comfyui-impact-pack", "No module named 'cv2'"}}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("parseImportFailures = %v", got)
+	}
+	if got := parseImportFailures("[INFO]    0.1 seconds: /x/custom_nodes/ok\n"); len(got) != 0 {
+		t.Errorf("no failures expected: %v", got)
+	}
+}

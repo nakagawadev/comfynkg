@@ -28,6 +28,7 @@ Global flags: `--config <path>`, `--dry-run` (show what would change, change not
 | `update core <inst\|all> [--version X]` | Update ComfyUI, canary first, rollback on failure |
 | `update nodes <inst\|all> [node...] [--remote]` | Update custom nodes, same way |
 | `update cli` | Upgrade comfy-cli |
+| `check <inst\|all>` | Load every custom node in a throwaway ComfyUI (CPU, temporary user folder) and list the ones that fail to import, with the reason; the running instance isn't touched |
 | `snapshot <inst>` · `rollback <inst> [file]` | Save or restore a custom node snapshot |
 | `comfy <inst> -- <args>` | Run comfy-cli on that instance (options that would break comfynkg are refused) |
 

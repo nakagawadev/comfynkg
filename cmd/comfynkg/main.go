@@ -47,6 +47,7 @@ type command struct {
 var commands = map[string]command{
 	"status":      {cmdStatus, false},
 	"apply":       {cmdApply, true},
+	"check":       {cmdCheck, true},
 	"start":       {cmdStart, true},
 	"stop":        {cmdStop, true},
 	"enable":      {cmdEnable, true},

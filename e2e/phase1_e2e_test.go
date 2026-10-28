@@ -65,6 +65,19 @@ func TestPhase1(t *testing.T) {
 	contains(t, out, "devbox · comfynkg", "NAME", "comfy_a  image  yes", "running", "ok")
 	contains(t, mustOK(t, "run", "comfy_a", "--print"), "/home/comfy/instances/comfy_a/.venv/bin/python main.py --listen 127.0.0.1,")
 
+	// check: every custom node imports; a broken one is named with its reason; the instance keeps running
+	contains(t, mustOK(t, "check", "comfy_a"), "(comfy_a) custom nodes... ok")
+	broken := root + "/comfy_a/custom_nodes/nkg_broken.py"
+	sh(t, "runuser -u comfy -- sh -c 'echo import nkg_missing_module_xyz > "+broken+"'")
+	r := nkg(t, "check", "comfy_a")
+	if r.code != 1 || !strings.Contains(r.out, "1 failed to import") || !strings.Contains(r.out, "nkg_broken.py: No module named 'nkg_missing_module_xyz'") {
+		t.Errorf("check with a broken node: exit %d", r.code)
+	}
+	os.Remove(broken)
+	if a := active(t, "comfynkg-comfy_a"); a != "active" {
+		t.Fatalf("check touched the running instance: %s", a)
+	}
+
 	// apply again: nothing to do
 	out = mustOK(t, "apply")
 	contains(t, out, "(comfy_a) unit unchanged, enabled", "done: 0 restarted, 0 started, 2 unchanged")
@@ -89,7 +102,7 @@ func TestPhase1(t *testing.T) {
 
 	// invalid edits are refused and leave the file alone
 	before, _ := os.ReadFile(cfgPath)
-	r := nkg(t, "set", "comfy_a", "port", "8189")
+	r = nkg(t, "set", "comfy_a", "port", "8189")
 	if r.code != 2 || !strings.Contains(r.out, "already used by comfy_a") && !strings.Contains(r.out, "already used by") {
 		t.Fatalf("duplicate port: exit %d", r.code)
 	}
