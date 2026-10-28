@@ -63,6 +63,15 @@ Edit it and run `comfynkg apply`, or let comfynkg edit it for you: `enable`, `di
 
 With `hosts:`, `status` also runs `comfynkg status --local` on each of those servers over ssh, as the owner of the instances (the same key and `~/.ssh/config` that model sync uses; a plain name means `<owner>@name`), and prints one table per server. A server that doesn't answer shows as `unreachable` and the rest still print. `status <inst>` finds the instance on whichever server has it. The other servers need comfynkg too, and nothing else is run there.
 
+Each `status` opens a new ssh connection per server, and across long distances the handshake is most of the time (3 s with ~200 ms between servers). Let ssh reuse connections in the owner's `~/.ssh/config`; model sync keeps them open, so `status` stays fast (0.7 s in the same setup):
+
+```
+Host node1 node2
+    ControlMaster auto
+    ControlPath ~/.ssh/cm-%r@%h:%p
+    ControlPersist 10m
+```
+
 ## Plugin
 
 With a `plugin:` section, `apply` writes a `comfyui_nakagawa.yaml` next to each models file for the [comfyui_nakagawa](https://github.com/nakagawadev/comfyui_nakagawa) node, with drain turned on and `stats` passed through. `plugin.instances` takes per-instance overrides by name (comfynkg translates them to ports). A file comfynkg didn't write is never overwritten.
