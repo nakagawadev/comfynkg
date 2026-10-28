@@ -16,7 +16,7 @@ comfynkg calls [comfy-cli](https://github.com/Comfy-Org/comfy-cli) for installs,
 
 ComfyUI starts with `--enable-manager --disable-manager-ui` unless your flags pick another Manager mode: Manager's background work (like switching a registry node's version at startup) runs, but its UI and install endpoints stay off.
 
-`update core` and `update nodes` snapshot every target first, then update one instance (the canary), restart it with `--wait` and check its health. If it fails, that instance is rolled back and the run stops; if it works, the rest follow one at a time.
+`update core` and `update nodes` snapshot every target first, then update one instance (the canary), check that every custom node still imports, restart it with `--wait` and check its health. `node install|uninstall|enable|disable` work the same way. If it fails, that instance is rolled back and the run stops; if it works, the rest follow one at a time.
 
 ## Takeover
 

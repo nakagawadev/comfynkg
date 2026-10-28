@@ -216,6 +216,24 @@ func modelCategories(list string) []string {
 	return out
 }
 
+// importsOK runs the import check and turns failing nodes into an error, listing them.
+func importsOK(c *config.Config, in *config.Instance) error {
+	failures, err := importCheck(c, in)
+	if err != nil {
+		return fmt.Errorf("import check: %w", err)
+	}
+	if len(failures) == 0 {
+		return nil
+	}
+	p := prefix(c, in)
+	names := make([]string, len(failures))
+	for i, f := range failures {
+		ui.Line(p, "%s doesn't import: %s", ui.Cyan(f.Node), f.Reason)
+		names[i] = f.Node
+	}
+	return fmt.Errorf("custom nodes don't import: %s", strings.Join(names, ", "))
+}
+
 // installNodeRequirements installs every custom node's requirements.txt in the new venv: a restored
 // snapshot brings the nodes back but not always their Python dependencies. A file that would change
 // torch is skipped with a warning, so a node can't swap the PyTorch build ComfyUI was installed with.
@@ -549,6 +567,9 @@ func canary(c *config.Config, targets []*config.Instance, label string, do chang
 		}
 		ui.Line(p, "%s%s...", tag, label)
 		undo, err := do(in)
+		if err == nil {
+			err = importsOK(c, in) // before the restart: a node that doesn't load never reaches a running instance
+		}
 		if err == nil && isActive(in) {
 			err = restartOne(ctx, c, in, restartOpts{wait: true, timeout: 10 * time.Minute})
 			if errors.Is(err, errSkipped) {

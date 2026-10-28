@@ -99,7 +99,7 @@ func TestPhase3(t *testing.T) {
 	if r.code != 1 {
 		t.Fatalf("killer canary: exit %d", r.code)
 	}
-	contains(t, r.out, "(comfy_a) canary: installing "+killer+"@main...", "crashed on start", "(comfy_a) rolling back to", "(comfy_a) restarting... ok", "stopped: comfy_a failed and was rolled back; 0 updated")
+	contains(t, r.out, "(comfy_a) canary: installing "+killer+"@main...", "import check: ComfyUI didn't start", "(comfy_a) rolling back to", "(comfy_a) restarting... ok", "stopped: comfy_a failed and was rolled back; 0 updated")
 	if strings.Contains(r.out, "(comfy_c) installing") {
 		t.Error("kept going after the canary failed")
 	}
@@ -110,6 +110,21 @@ func TestPhase3(t *testing.T) {
 	}
 	if !healthy(8188) || !healthy(8190) {
 		t.Fatal("instances not healthy after rollback")
+	}
+
+	// a node whose dependency is missing never reaches the running instance: the import check catches
+	// it before the restart, names the node and the reason, and the change is rolled back
+	broken := gitRepo(t, "brokennode", map[string]string{"__init__.py": "import nkg_missing_dependency_xyz\nNODE_CLASS_MAPPINGS = {}\n"})
+	r = nkg(t, "node", "install", "comfy_c", broken, "--ref", "main")
+	if r.code != 1 {
+		t.Fatalf("broken node: exit %d", r.code)
+	}
+	contains(t, r.out, "brokennode doesn't import: No module named 'nkg_missing_dependency_xyz'", "(comfy_c) rolling back to", "stopped: comfy_c failed and was rolled back")
+	if _, err := os.Stat(root + "/comfy_c/custom_nodes/brokennode"); err == nil {
+		t.Error("comfy_c still has the broken node")
+	}
+	if !healthy(8190) {
+		t.Fatal("comfy_c not healthy after the rollback")
 	}
 
 	// snapshot + rollback
