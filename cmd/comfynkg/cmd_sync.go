@@ -17,9 +17,21 @@ var syncInterval = 60 * time.Second
 
 func cmdSync(args []string) error {
 	if len(args) == 0 {
-		return usagef("usage: comfynkg sync status|now|dry-run [image|video] | sync loop <type>")
+		return usagef("usage: comfynkg sync status [image|video] [-w] | sync now|dry-run [image|video] | sync loop <type>")
 	}
 	verb, rest := args[0], args[1:]
+	watch := false
+	if verb == "status" {
+		var kept []string
+		for _, a := range rest {
+			if a == "-w" || a == "--watch" {
+				watch = true
+			} else {
+				kept = append(kept, a)
+			}
+		}
+		rest = kept
+	}
 	if verb != "loop" && verb != "status" && os.Geteuid() != 0 {
 		return usagef("sync %s must run as root", verb)
 	}
@@ -44,6 +56,9 @@ func cmdSync(args []string) error {
 	}
 	switch verb {
 	case "status":
+		if watch {
+			return watchEvery(2*time.Second, func() error { return syncStatus(types) })
+		}
 		return syncStatus(types)
 	case "now":
 		for _, t := range types {

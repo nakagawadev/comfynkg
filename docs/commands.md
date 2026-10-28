@@ -37,7 +37,7 @@ Global flags: `--config <path>`, `--dry-run` (show what would change, change not
 | Command | Does |
 |---|---|
 | `takeover <inst> --old <unit> [--wait]` | Replace a hand-made unit with the managed one, same port |
-| `sync status\|now\|dry-run [image\|video]` | Model sync state (while copying: done / total and speed), a round now, or what a round would copy and delete |
+| `sync status [image\|video] [-w]` · `sync now\|dry-run [image\|video]` | Model sync state (while copying: done / total and speed; `-w` refreshes every 2 s), a round now, or what a round would copy and delete |
 | `self-update [vX.Y.Z\|binary]` | Install the latest release, a given one, or a local binary |
 | `version` | comfynkg, comfy-cli and uv versions |
 

@@ -45,16 +45,22 @@ func cmdStatus(args []string) error {
 	if !watch {
 		return statusOnce(o)
 	}
+	return watchEvery(2*time.Second, func() error { return statusOnce(o) })
+}
+
+// watchEvery redraws draw's output every interval until Ctrl-C. Each frame is rendered first and
+// then printed in one go, so the screen never flickers or sits empty while hosts answer.
+func watchEvery(interval time.Duration, draw func() error) error {
 	for {
 		var buf bytes.Buffer
 		ui.Out = &buf
-		err := statusOnce(o)
+		err := draw()
 		ui.Out = os.Stdout
 		if err != nil {
 			return err
 		}
-		fmt.Printf("\x1b[H\x1b[2J%severy 2s · %s · Ctrl-C to exit\n", buf.String(), time.Now().Format("15:04:05"))
-		time.Sleep(2 * time.Second)
+		fmt.Printf("\x1b[H\x1b[2J%severy %s · %s · Ctrl-C to exit\n", buf.String(), interval, time.Now().Format("15:04:05"))
+		time.Sleep(interval)
 	}
 }
 
