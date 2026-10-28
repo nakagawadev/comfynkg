@@ -23,6 +23,7 @@ Global flags: `--config <path>`, `--dry-run` (show what would change, change not
 |---|---|
 | `create <inst> --type T --port N --gpu N [--nodes-from <path\|inst>] [--nodes-venv <venv>] [--version X]` | Install ComfyUI for a new instance (disabled), optionally copying custom nodes from another install |
 | `remove <inst> [--purge]` | Remove the unit and the file entry; `--purge` also deletes its folder |
+| `rename <inst> <new> [--timeout 600] [--force]` | New name for the key, the folder and the unit, same port; drains and waits first, undoes everything if a step fails |
 | `node install\|uninstall\|enable\|disable <inst\|all> <node> [--ref <branch\|tag>]` | Custom nodes; `--ref` installs from git |
 | `update core <inst\|all> [--version X]` | Update ComfyUI, canary first, rollback on failure |
 | `update nodes <inst\|all> [node...] [--remote]` | Update custom nodes, same way |

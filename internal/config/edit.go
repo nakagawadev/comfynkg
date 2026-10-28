@@ -143,3 +143,36 @@ func (c *Config) RemoveInstance(name string) error {
 	}
 	return fmt.Errorf("instance %q not found", name)
 }
+
+// RenameInstance renames an instance's key, and its entry in plugin.instances, keeping comments.
+func (c *Config) RenameInstance(old, name string) error {
+	if !nameRe.MatchString(name) {
+		return fmt.Errorf("%q is not a valid instance name (%s)", name, nameRe)
+	}
+	if len(c.doc.Content) == 0 {
+		return fmt.Errorf("empty config")
+	}
+	top := c.doc.Content[0]
+	if mapValue(top, name) != nil {
+		return fmt.Errorf("%q already exists", name)
+	}
+	found := false
+	for i := 0; i+1 < len(top.Content); i += 2 {
+		if top.Content[i].Value == old {
+			top.Content[i].Value, found = name, true
+		}
+	}
+	if !found {
+		return fmt.Errorf("instance %q not found", old)
+	}
+	if plugin := mapValue(top, "plugin"); plugin != nil {
+		if insts := mapValue(plugin, "instances"); insts != nil && insts.Kind == yaml.MappingNode {
+			for i := 0; i+1 < len(insts.Content); i += 2 {
+				if insts.Content[i].Value == old {
+					insts.Content[i].Value = name
+				}
+			}
+		}
+	}
+	return nil
+}

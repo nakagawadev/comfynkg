@@ -253,3 +253,29 @@ func TestDotDirsToCreate(t *testing.T) {
 		t.Errorf("foreign home: %v", got)
 	}
 }
+
+func TestRenameInstance(t *testing.T) {
+	c := fixture(t, good+"plugin:\n  instances:\n    comfy_1: { drain: false }\n")
+	if err := c.RenameInstance("comfy_1", "comfy_x"); err != nil {
+		t.Fatal(err)
+	}
+	b, _ := c.Bytes()
+	next, err := Parse(b)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if next.Instance("comfy_x") == nil || next.Instance("comfy_1") != nil || next.Instance("comfy_x").Port != 8189 {
+		t.Fatalf("not renamed:\n%s", b)
+	}
+	if !strings.Contains(string(b), "comfy_0: # first") || !strings.Contains(string(b), "comfy_x: {drain: false}") {
+		t.Errorf("comments or plugin.instances lost:\n%s", b)
+	}
+	for _, bad := range []string{"comfy_0", "Bad Name", "comfy_x"} {
+		if err := c.RenameInstance("comfy_x", bad); err == nil && bad != "comfy_x" {
+			t.Errorf("renaming to %q was accepted", bad)
+		}
+	}
+	if err := c.RenameInstance("nope", "comfy_y"); err == nil {
+		t.Error("renaming a missing instance was accepted")
+	}
+}

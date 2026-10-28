@@ -57,6 +57,7 @@ var commands = map[string]command{
 	"drain":       {cmdDrain, false}, // on/off check root themselves
 	"create":      {cmdCreate, true},
 	"remove":      {cmdRemove, true},
+	"rename":      {cmdRename, true},
 	"node":        {cmdNode, true},
 	"update":      {cmdUpdate, true},
 	"snapshot":    {cmdSnapshot, true},
