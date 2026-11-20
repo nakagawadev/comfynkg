@@ -2,6 +2,7 @@ name: ci
 
 on:
   push:
+    branches: [main]   # branches run once, from their PR; tags run the release workflow's own tests
   pull_request:
 
 permissions:
