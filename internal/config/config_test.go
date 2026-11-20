@@ -6,6 +6,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"gopkg.in/yaml.v3"
 )
 
 func TestSplitArgs(t *testing.T) {
@@ -235,9 +237,41 @@ plugin:
 	if string(img) != string(vid) || !strings.Contains(string(img), `"8188":`) || !strings.Contains(string(img), `"8190":`) {
 		t.Errorf("shared models file:\n%s\n---\n%s", img, vid)
 	}
-	bad := fixture(t, good+"plugin:\n  instances:\n    comfy_9: {}\n  extra: 1\n")
-	if _, err := bad.Validate(); err == nil || !strings.Contains(err.Error(), "no such instance") || !strings.Contains(err.Error(), "plugin.extra") {
+	bad := fixture(t, good+"plugin:\n  instances:\n    comfy_9: {}\n  extra: 1\n  audio: 15\n")
+	if _, err := bad.Validate(); err == nil || !strings.Contains(err.Error(), "no such instance") || !strings.Contains(err.Error(), "plugin.extra") || !strings.Contains(err.Error(), "plugin.audio: must be a mapping") {
 		t.Errorf("err = %v", err)
+	}
+}
+
+// url_loader and the per-kind limits go to the plugin file as-is, globally and per instance
+func TestPluginFileLimits(t *testing.T) {
+	c := fixture(t, good+`
+plugin:
+  url_loader: { allowed_hosts: [cdn.example.com], max_mb: { video: 50 } }
+  audio: { min_s: 2, max_s: 15 }
+  video: { max_s: 15, max_fps: 30 }
+  instances:
+    comfy_1: { video: { max_s: 30 } }
+`)
+	if _, err := c.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	b, err := c.PluginFile("image")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got map[string]any
+	if err := yaml.Unmarshal(b, &got); err != nil {
+		t.Fatal(err)
+	}
+	ul, _ := got["url_loader"].(map[string]any)
+	audio, _ := got["audio"].(map[string]any)
+	video, _ := got["video"].(map[string]any)
+	insts, _ := got["instances"].(map[string]any)
+	inst, _ := insts["8189"].(map[string]any)
+	instVideo, _ := inst["video"].(map[string]any)
+	if ul["allowed_hosts"] == nil || audio["max_s"] != 15 || video["max_fps"] != 30 || instVideo["max_s"] != 30 || got["drain"] != true {
+		t.Errorf("plugin file:\n%s", b)
 	}
 }
 

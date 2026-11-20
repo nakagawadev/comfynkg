@@ -74,4 +74,16 @@ Host node1 node2
 
 ## Plugin
 
-With a `plugin:` section, `apply` writes a `comfyui_nakagawa.yaml` next to each models file for the [comfyui_nakagawa](https://github.com/nakagawadev/comfyui_nakagawa) node, with drain turned on and `stats` passed through. `plugin.instances` takes per-instance overrides by name (comfynkg translates them to ports). A file comfynkg didn't write is never overwritten.
+With a `plugin:` section, `apply` writes a `comfyui_nakagawa.yaml` next to each models file for the [comfyui_nakagawa](https://github.com/nakagawadev/comfyui_nakagawa) node, with drain turned on and `stats`, `url_loader`, `image`, `audio` and `video` passed through as they are (the node documents their keys). `plugin.instances` takes per-instance overrides by name (comfynkg translates them to ports). A file comfynkg didn't write is never overwritten.
+
+```yaml
+plugin:
+  stats: { enabled: true, dir: /home/comfy/stats }
+  url_loader: { allowed_hosts: [cdn.example.com] }   # Load ... (URL) nodes
+  audio: { min_s: 2, max_s: 15 }                     # per-file limits of the base64 and URL loaders
+  video: { min_s: 2, max_s: 15, max_long_side: 1920, max_short_side: 1080, max_fps: 30 }
+  instances:
+    comfy_b: { video: { max_s: 30 } }
+```
+
+Inside an instance, `stats` keys merge with the global ones, but `url_loader`, `image`, `audio` and `video` replace the global section whole: `comfy_b` above gets `max_s: 30` and no other video limit.
