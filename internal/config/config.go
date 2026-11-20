@@ -9,6 +9,7 @@ import (
 	"os/user"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -384,12 +385,23 @@ func (c *Config) validateSync() []string {
 	return errs
 }
 
-// validatePlugin checks the plugin section: only stats and instances, and instances that exist.
+// pluginSections are copied as-is into comfyui_nakagawa.yaml: the plugin's URL loader and
+// per-kind limits (formats, duration, resolution, fps). The plugin validates their contents.
+var pluginSections = []string{"url_loader", "image", "audio", "video"}
+
+// validatePlugin checks the plugin section: only stats, instances and pluginSections (as
+// mappings), and instances that exist.
 func (c *Config) validatePlugin() []string {
 	var errs []string
-	for k := range c.Plugin {
-		if k != "stats" && k != "instances" {
-			errs = append(errs, fmt.Sprintf("plugin.%s: unknown key (stats, instances)", k))
+	for k, v := range c.Plugin {
+		switch {
+		case k == "stats" || k == "instances":
+		case slices.Contains(pluginSections, k):
+			if _, ok := v.(map[string]any); !ok {
+				errs = append(errs, fmt.Sprintf("plugin.%s: must be a mapping", k))
+			}
+		default:
+			errs = append(errs, fmt.Sprintf("plugin.%s: unknown key (stats, instances, %s)", k, strings.Join(pluginSections, ", ")))
 		}
 	}
 	insts, _ := c.Plugin["instances"].(map[string]any)
@@ -402,12 +414,14 @@ func (c *Config) validatePlugin() []string {
 }
 
 // PluginFile renders comfyui_nakagawa.yaml for one model type:
-// plugin.stats, drain always on, per-instance overrides keyed by port.
+// plugin.stats and pluginSections, drain always on, per-instance overrides keyed by port.
 // Types that share a models file share this file, so it holds their instances too.
 func (c *Config) PluginFile(typ string) ([]byte, error) {
 	out := map[string]any{"drain": true}
-	if st, ok := c.Plugin["stats"]; ok {
-		out["stats"] = st
+	for _, k := range append([]string{"stats"}, pluginSections...) {
+		if v, ok := c.Plugin[k]; ok {
+			out[k] = v
+		}
 	}
 	insts, _ := c.Plugin["instances"].(map[string]any)
 	byPort := map[string]any{}
